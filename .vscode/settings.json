@@ -1,0 +1,6 @@
+{
+    "python.analysis.extraPaths": [
+        "./slice-csv_",
+        "./slice-csv_"
+    ]
+}

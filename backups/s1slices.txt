@@ -1,0 +1,58 @@
+ohne exo
+
+264157, 307120
+311889, 385205
+525071, 550591
+553620, 652306; 656731, 682294
+687342, 756148
+760208, 886755
+
+mit exo
+
+56732, 103239
+107128, 121885
+158361, 216490
+220099, 260269
+265038, 307571; 311202, 343274
+347291, 489562
+
+
+source_file = "ohne_exo"
+source_folder = "./Data/EMG/Subject1/"
+source_path = source_folder + source_file + ".csv"
+# start and end manually extracted from trigno discover review
+slices.append(
+    (source_folder + "sliced/" + source_file + "_exercise1.csv", [(264157, 307120)])
+)
+slices.append(
+    (source_folder + "sliced/" + source_file + "_exercise2.csv", [(311889, 385205)])
+)
+slices.append(
+    (source_folder + "sliced/" + source_file + "_exercise3.csv", [(525071, 550591)])
+)
+slices.append(
+    (
+        source_folder + "sliced/" + source_file + "_exercise4.csv",
+        [(553620, 652306), (656731, 682294)],
+    )
+)
+slices.append(
+    (source_folder + "sliced/" + source_file + "_exercise5.csv", [(687342, 756148)])
+)
+slices.append(
+    (source_folder + "sliced/" + source_file + "_exercise6.csv", [(760208, 886755)])
+)
+slices.append(
+    (
+        source_folder + "sliced/" + source_file + "_exercises_combined.csv",
+        [
+            (264157, 307120),
+            (311889, 385205),
+            (525071, 550591),
+            (553620, 652306),
+            (656731, 682294),
+            (687342, 756148),
+            (760208, 886755),
+        ],
+    )
+)

@@ -1,0 +1,89 @@
+ohne exo
+54928, 134087
+138448, 212279
+218144, 329418
+332898, 392745
+401811, 495577
+500282, 655851
+
+source_folder = "./Data/Subject3/EMG/"
+source_file = "ohne_exo"
+source_path = source_folder + source_file + ".csv"
+# start and end manually extracted from trigno discover review
+slices.append(
+    (source_folder + "sliced/" + source_file + "_exercise1.csv", [(54928, 134087)])
+)
+slices.append(
+    (source_folder + "sliced/" + source_file + "_exercise2.csv", [(138448, 212279)])
+)
+slices.append(
+    (source_folder + "sliced/" + source_file + "_exercise3.csv", [(218144, 329418)])
+)
+slices.append(
+    (source_folder + "sliced/" + source_file + "_exercise4.csv", [(332898, 392745)])
+)
+slices.append(
+    (source_folder + "sliced/" + source_file + "_exercise5.csv", [(401811, 495577)])
+)
+slices.append(
+    (source_folder + "sliced/" + source_file + "_exercise6.csv", [(500282, 655851)])
+)
+slices.append(
+    (
+        source_folder + "sliced/" + source_file + "_exercises_combined.csv",
+        [
+            (54928, 134087),
+            (138448, 212279),
+            (218144, 329418),
+            (332898, 392745),
+            (401811, 495577),
+            (500282, 655851)
+        ],
+    )
+)
+
+
+mit exo
+241408, 297926
+301449, 365421
+369374, 480304
+486276, 547670
+550999, 612845
+615895, 753699
+
+
+source_folder = "./Data/Subject3/EMG/"
+source_file = "mit_exo"
+source_path = source_folder + source_file + ".csv"
+# start and end manually extracted from trigno discover review
+slices.append(
+    (source_folder + "sliced/" + source_file + "_exercise1.csv", [(241408, 297926)])
+)
+slices.append(
+    (source_folder + "sliced/" + source_file + "_exercise2.csv", [(301449, 365421)])
+)
+slices.append(
+    (source_folder + "sliced/" + source_file + "_exercise3.csv", [(369374, 480304)])
+)
+slices.append(
+    (source_folder + "sliced/" + source_file + "_exercise4.csv", [(486276, 547670)])
+)
+slices.append(
+    (source_folder + "sliced/" + source_file + "_exercise5.csv", [(550999, 612845)])
+)
+slices.append(
+    (source_folder + "sliced/" + source_file + "_exercise6.csv", [(615895, 753699)])
+)
+slices.append(
+    (
+        source_folder + "sliced/" + source_file + "_exercises_combined.csv",
+        [
+            (241408, 297926),
+            (301449, 365421),
+            (369374, 480304),
+            (486276, 547670),
+            (550999, 612845),
+            (615895, 753699),
+        ],
+    )
+)

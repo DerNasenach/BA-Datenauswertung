@@ -1,0 +1,53 @@
+ohne_exo
+69112, 90830
+96115, 129841
+135834, 176133
+182728, 212007
+218452, 271898
+374343, 513199
+
+slices.append(
+    (source_folder + "sliced/" + source_file + "_exercise1.csv", [(69112, 90830)])
+)
+slices.append(
+    (source_folder + "sliced/" + source_file + "_exercise2.csv", [(96115, 129841)])
+)
+slices.append(
+    (source_folder + "sliced/" + source_file + "_exercise3.csv", [(135834, 176133)])
+)
+slices.append(
+    (source_folder + "sliced/" + source_file + "_exercise4.csv", [(182728, 212007)])
+)
+slices.append(
+    (source_folder + "sliced/" + source_file + "_exercise5.csv", [(218452, 271898)])
+)
+slices.append(
+    (source_folder + "sliced/" + source_file + "_exercise6.csv", [(374343, 513199)])
+)
+
+mit_exo
+64408, 80261
+84622, 97747
+101399, 136865
+142708, 168078
+173255, 220492
+226872, 355203
+
+slices.append(
+    (source_folder + "sliced/" + source_file + "_exercise1.csv", [(64408, 80261)])
+)
+slices.append(
+    (source_folder + "sliced/" + source_file + "_exercise2.csv", [(84622, 97747)])
+)
+slices.append(
+    (source_folder + "sliced/" + source_file + "_exercise3.csv", [(101399, 136865)])
+)
+slices.append(
+    (source_folder + "sliced/" + source_file + "_exercise4.csv", [(142708, 168078)])
+)
+slices.append(
+    (source_folder + "sliced/" + source_file + "_exercise5.csv", [(173255, 220492)])
+)
+slices.append(
+    (source_folder + "sliced/" + source_file + "_exercise6.csv", [(226872, 355203)])
+)
