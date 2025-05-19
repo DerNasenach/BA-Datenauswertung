@@ -1,9 +1,9 @@
 import json
 
-# Concatenates the slice indices for each exercise and appends them to the round
+# Concatenates the slice indices for each exercise of a round and appends them to the round
 
-for i in range(1,9):
-    json_path = 'Data/EMG/Subject' + str(i) + '/subject' + str(i) + '_slices.json'
+for i in range(1, 9):
+    json_path = "Data/EMG/Subject" + str(i) + "/subject" + str(i) + "_slices.json"
     infile = json.load(open(json_path))
     for trial in infile.values():
         all_exercises = []
@@ -11,6 +11,5 @@ for i in range(1,9):
             if key.startswith("exercise"):
                 all_exercises.extend(value)
         trial["exercises_concat"] = all_exercises
-        with open(json_path, 'w') as f:
+        with open(json_path, "w") as f:
             json.dump(infile, f, indent=4)
-

@@ -38,8 +38,7 @@ def compute_median_frequency(signal):
     return median_freq
 
 
-"""
-def make_eval(path, ext):
+def make_eval_old(path, ext):
     files = [f for f in os.listdir(path) if f.endswith(".csv")]
     # print(files)
 
@@ -82,7 +81,6 @@ def make_eval(path, ext):
         fmt="%s",
     )
     return
-"""
 
 
 # returns a list of int with indices of detected anomalies in the input list
@@ -104,9 +102,6 @@ def remove_anomalies(time_series: np.array):
 # returns the RMS of a time series
 def root_mean_square(time_series):
     return time_series
-
-
-# def eval_exercise()
 
 
 def eval_subject(subject_number: int):
@@ -170,6 +165,7 @@ def eval_subject(subject_number: int):
                     (no_exo_max, with_exo_max),
                     (no_exo_mean, with_exo_mean),
                     (no_exo_median_freq, with_exo_median_freq),
+                    (values_no_exo_cleaned, values_with_exo_cleaned),
                 )
             )
 
@@ -178,6 +174,7 @@ def eval_subject(subject_number: int):
     return evaluation_subject
 
 
+# takes two lists of max, mean and median freq values
 def make_statistical_analysis(muscle_number: int, values, differences):
     VALUE_STRINGS = {0: "max", 1: "mean", 2: "median frequency"}
     report = {MUSCLE_NAMES[muscle_number]: {}}
@@ -236,15 +233,12 @@ def make_statistical_analysis(muscle_number: int, values, differences):
             "p-value": p,
             "effect size": effect_size,
         }
-        # print("muscle: " + str(muscle_number))
-        # print("p: " + str(p_value))
-        # print("stat: " + str(stat))
+
     os.makedirs("Data/EMG/evaluations/per_muscle", exist_ok=True)
     with open(
         "Data/EMG/evaluations/per_muscle/" + MUSCLE_NAMES[muscle_number] + ".json", "w"
     ) as file:
         json.dump(report, file, indent=4)
-    return
 
 
 def compare_muscles_over_all_exercises(evals):
