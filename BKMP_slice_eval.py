@@ -81,7 +81,7 @@ def get_statistical_analysis(differences, values1, values2):
 
         # Compute Cohen's d-value for effect size
         d = mean_diff / std_diff
-        effect_size = "Cohen d-value : " + str(d)
+        effect_size = f"Cohen d-value : {d}"
         if d < 0.2:
             effect_size += ". no effect"
         elif d < 0.5:
@@ -99,7 +99,7 @@ def get_statistical_analysis(differences, values1, values2):
         z = norm.ppf(1 - p / 2)
         r = z / np.sqrt(len(differences))
 
-        effect_size = "Wilcoxon r-value : " + str(r)
+        effect_size = f"Wilcoxon r-value : {r}"
         if r < 0.1:
             effect_size += ". no effect"
         elif r < 0.3:
