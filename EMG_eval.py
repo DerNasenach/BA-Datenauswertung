@@ -30,9 +30,10 @@ MUSCLE_NAMES = {
     7: "Erector spinae right",
 }
 VERBOSE = True
+MULTI_PROCESSING = True
 
 
-def compute_median_frequency(signal):
+def get_median_frequency(signal):
     # Compute power Spectral Density using welch
     freqs, psd = welch(signal, fs=SAMPLING_RATE, nperseg=1024)
 
@@ -41,51 +42,6 @@ def compute_median_frequency(signal):
     median_freq = freqs[np.where(cumulative_power >= total_power / 2)[0][0]]
 
     return median_freq
-
-
-def make_eval_old(path, ext):
-    files = [f for f in os.listdir(path) if f.endswith(".csv")]
-    # print(files)
-
-    muscles = np.genfromtxt(
-        path + "/" + files[0], delimiter=";", dtype=str, max_rows=1
-    )[
-        ::2
-    ]  # TODO: sanitize
-    muscles = np.insert(muscles, [0], [" ", " "])
-    # print(muscles)
-
-    out_table = muscles.copy()
-    for file in files:
-        print(file)
-
-        data = np.genfromtxt(
-            path + "/" + file, delimiter=";", dtype=float, skip_header=4
-        ).T.copy()[::2]
-        # print(str(data))
-
-        max_values = np.array([file, "max mV rect"])
-        mean_values = np.array([" ", "mean mV rect"])
-        median_frequencies = np.array([" ", "median frequency"])
-        for muscle in data:
-            max, mean = compute_rectified_max_mean(muscle)
-            max_values = np.append(max_values, str(max))
-            mean_values = np.append(mean_values, str(mean))
-            median_frequency, _, _ = compute_median_frequency(muscle, SAMPLING_RATE)
-            median_frequencies = np.append(median_frequencies, str(median_frequency))
-        # print(max_values)
-        # print(mean_values)
-        out_table = np.vstack((out_table, max_values, mean_values, median_frequencies))
-        # print(out_table)
-
-    # print(out_table)
-    np.savetxt(
-        path + "/evaluation" + ext,
-        out_table,
-        delimiter=";",
-        fmt="%s",
-    )
-    return
 
 
 # returns a list of int with indices of detected anomalies in the input list
@@ -166,6 +122,7 @@ def wrms(time_series, window_size=50):
     return generic_filter(time_series, rms, size=window_size)
 
 
+# reads and formats the sliced data of specified subject, computes metrics
 def get_metrics_subject(subject_number: int):
     if VERBOSE:
         print(f"evaluating Subject {subject_number}")
@@ -216,11 +173,11 @@ def get_metrics_subject(subject_number: int):
 
             no_exo_max = np.max(values_no_exo_wrms)
             no_exo_mean = np.mean(values_no_exo_wrms)
-            no_exo_median_freq = compute_median_frequency(values_no_exo_cleaned)
+            no_exo_median_freq = get_median_frequency(values_no_exo_cleaned)
 
             with_exo_max = np.max(values_with_exo_wrms)
             with_exo_mean = np.mean(values_with_exo_wrms)
-            with_exo_median_freq = compute_median_frequency(values_with_exo_cleaned)
+            with_exo_median_freq = get_median_frequency(values_with_exo_cleaned)
 
             evaluation_exercise.append(
                 (
@@ -607,30 +564,11 @@ def make_statistics_analysis_from_metrics(evals):
 
 
 if __name__ == "__main__":
-    # subject_evals = []
-    # for i in range(1, 9):
-    # subject_evals.append(get_metrics_subject(i))
-    with mp.Pool(processes=mp.cpu_count()) as pool:
-        subject_evals = pool.map(get_metrics_subject, range(1, 9))
-
+    if MULTI_PROCESSING:
+        with mp.Pool(processes=mp.cpu_count()) as pool:
+            subject_evals = pool.map(get_metrics_subject, range(1, 9))
+    else:
+        subject_evals = []
+        for i in range(1, 9):
+            subject_evals.append(get_metrics_subject(i))
     make_statistics_analysis_from_metrics(subject_evals)
-
-
-"""
-print(f"Median Frequency: {median_freq:.2f} Hz")
-# Plot PSD
-plt.figure(figsize=(8, 4))
-plt.semilogy(freqs, psd)
-plt.axvline(
-    median_freq,
-    color="r",
-    linestyle="--",
-    label=f"Median Frequency = {median_freq:.2f} Hz",
-)
-plt.xlabel("Frequency (Hz)")
-plt.ylabel("Power Spectral Density")
-plt.title("Power Spectral Density and Median Frequency")
-plt.legend()
-plt.grid()
-plt.show()
-"""
