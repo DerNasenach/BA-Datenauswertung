@@ -30,7 +30,7 @@ MUSCLE_NAMES = {
     7: "Erector spinae right",
 }
 VERBOSE = True
-MULTI_PROCESSING = True
+MULTI_PROCESSING = False
 
 
 def get_median_frequency(signal):
@@ -45,8 +45,8 @@ def get_median_frequency(signal):
 
 
 # returns a list of int with indices of detected anomalies in the input list
-def detect_anomalies_iforest(
-    time_series, window_size=8000, stride=800, std_factor=4.5, plot=False
+def detect_anomalies_iforest_windowed_threshold(
+    time_series, window_size=80000, stride=800, std_factor=3, plot=False
 ):
     if VERBOSE:
         print("Starting anomaly detection")
@@ -64,13 +64,11 @@ def detect_anomalies_iforest(
         window_data = ts[start:end]
 
         model.fit(window_data)
-        window_scores = model.decision_function(window_data)  # shape: (window_size,)
+        window_scores = model.decision_function(window_data)
 
-        # Aggregate scores per index
         score_sum[start:end] += window_scores
         score_count[start:end] += 1
 
-    # Avoid division by zero
     valid = score_count > 0
     averaged_scores = np.full(n, np.nan)
     averaged_scores[valid] = score_sum[valid] / score_count[valid]
@@ -100,12 +98,59 @@ def detect_anomalies_iforest(
     return anomaly_indices
 
 
+def detect_anomalies_iforest_contamination(time_series, contamination, plot=True):
+    if VERBOSE:
+        print("Starting anomaly detection")
+
+    time_series = np.array(time_series).reshape(-1, 1)
+
+    model = IsolationForest(contamination=contamination, random_state=42)
+    model.fit(time_series)
+
+    labels = model.predict(time_series)
+    anomaly_indices = np.where(labels == -1)[0]
+    if VERBOSE:
+        print(f"End of anomaly detection. {len(anomaly_indices)} anomalies found")
+
+    if plot:
+        plt.figure(figsize=(12, 5))
+        plt.plot(time_series, label="Time Series")
+        plt.scatter(
+            anomaly_indices,
+            time_series[anomaly_indices],
+            color="red",
+            label="Anomalies",
+        )
+        plt.title("Anomaly Detection using Isolation Forest")
+        plt.legend()
+        plt.show()
+
+    return anomaly_indices
+
+
 # removes anomalies from time series, returns altered time series
-def remove_anomalies(time_series: np.array):
+def remove_anomalies(time_series: np.array, threshold=0.8):
+    expected_anomalies = np.sum(np.abs(time_series) > threshold)
+    if expected_anomalies == 0:
+        return time_series
+
+    print(f"expected anomalies: {expected_anomalies}")
+    expected_correct_values = np.sum(np.abs(time_series) < threshold)
+    if expected_correct_values == 0:
+        raise ValueError("Invalid file, no readable values in time series")
+
+    contamination_ratio = expected_anomalies / expected_correct_values
+    if contamination_ratio >= 0.5:
+        raise ValueError("Invalid file, too many anomalies in time series")
+
+    anomalies = detect_anomalies_iforest_contamination(time_series, contamination_ratio)
+
+    # no specified contamination
+    """
     if np.max(np.abs(time_series)) < 1:
         return time_series
     anomalies = detect_anomalies_iforest(time_series)
-
+    """
     mask = np.ones(len(time_series), dtype=bool)
     mask[anomalies] = False
 
