@@ -30,7 +30,7 @@ MUSCLE_NAMES = {
     7: "Erector spinae right",
 }
 VERBOSE = True
-MULTI_PROCESSING = False
+MULTI_PROCESSING = True
 
 
 def get_median_frequency(signal):
@@ -46,7 +46,7 @@ def get_median_frequency(signal):
 
 # returns a list of int with indices of detected anomalies in the input list
 def detect_anomalies_iforest_windowed_threshold(
-    time_series, window_size=80000, stride=800, std_factor=3, plot=False
+    time_series, window_size=5000, stride=500, std_factor=3, plot=False
 ):
     if VERBOSE:
         print("Starting anomaly detection")
@@ -98,7 +98,7 @@ def detect_anomalies_iforest_windowed_threshold(
     return anomaly_indices
 
 
-def detect_anomalies_iforest_contamination(time_series, contamination, plot=True):
+def detect_anomalies_iforest_contamination(time_series, contamination, plot=False):
     if VERBOSE:
         print("Starting anomaly detection")
 
@@ -130,6 +130,7 @@ def detect_anomalies_iforest_contamination(time_series, contamination, plot=True
 
 # removes anomalies from time series, returns altered time series
 def remove_anomalies(time_series: np.array, threshold=0.8):
+    """
     expected_anomalies = np.sum(np.abs(time_series) > threshold)
     if expected_anomalies == 0:
         return time_series
@@ -143,14 +144,13 @@ def remove_anomalies(time_series: np.array, threshold=0.8):
     if contamination_ratio >= 0.5:
         raise ValueError("Invalid file, too many anomalies in time series")
 
-    anomalies = detect_anomalies_iforest_contamination(time_series, contamination_ratio)
+    # anomalies = detect_anomalies_iforest_contamination(time_series, contamination_ratio)
 
     # no specified contamination
     """
-    if np.max(np.abs(time_series)) < 1:
+    if np.max(np.abs(time_series)) < threshold:
         return time_series
-    anomalies = detect_anomalies_iforest(time_series)
-    """
+    anomalies = detect_anomalies_iforest_windowed_threshold(time_series)
     mask = np.ones(len(time_series), dtype=bool)
     mask[anomalies] = False
 
@@ -207,7 +207,7 @@ def get_metrics_subject(subject_number: int):
 
         for j in range(0, 8):
             if VERBOSE:
-                print(f"reading muscle {MUSCLE_NAMES[j]}")
+                print(f"Subject {subject_number}, reading muscle {MUSCLE_NAMES[j]}")
             muscle_name = str(header[j])
             values_no_exo_cleaned = remove_anomalies(matrix_no_exo[j])
             values_with_exo_cleaned = remove_anomalies(matrix_with_exo[j])
