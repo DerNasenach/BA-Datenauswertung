@@ -30,7 +30,7 @@ MUSCLE_NAMES = {
     7: "Erector spinae right",
 }
 VERBOSE = True
-MULTI_PROCESSING = True
+MULTI_PROCESSING = False
 
 
 def get_median_frequency(signal):
@@ -98,7 +98,7 @@ def detect_anomalies_iforest_windowed_threshold(
     return anomaly_indices
 
 
-def detect_anomalies_iforest_contamination(time_series, contamination, plot=False):
+def detect_anomalies_iforest_contamination(time_series, contamination, plot=True):
     if VERBOSE:
         print("Starting anomaly detection")
 

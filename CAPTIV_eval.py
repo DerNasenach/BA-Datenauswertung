@@ -2,6 +2,7 @@ import os
 import json
 import numpy as np
 from scipy.spatial.transform import Rotation
+from datetime import datetime
 
 TRANSLATION_MAP_USED = {
     "Dos": "Back",
@@ -22,6 +23,7 @@ TRANSLATION_MAP_UNUSED = {
 }
 
 
+# extracts sensor configuration from an avatar.avt file, writes to json
 def parse_avt_to_json(input_path, output_path):
     mapping = {}
     with open(input_path, "r", encoding="utf-16") as file:
@@ -40,6 +42,7 @@ def parse_avt_to_json(input_path, output_path):
         json.dump(mapping, json_file, indent=4)
 
 
+# parses all .avt files in all subdirectories of the specified directory into a config.json
 def avatar_to_sensor_config(base_dir):
     for subdir in os.listdir(base_dir):
         subdir_path = os.path.join(base_dir, subdir)
@@ -76,13 +79,67 @@ def extract_quaternions(config_path, csv_path):
         data = np.genfromtxt(f, delimiter=",", filling_values=np.nan)[:, :-1]
 
         # some sensors end their collection slightly early, skip end rows that contain missing data to keep dimensions equal
-        data_clean = data[~np.isnan(data).any(axis=1)]
+        # data_clean = data[~np.isnan(data).any(axis=1)]
 
         for _, values in sensor_cols.items():
             cols = [values["qx"], values["qy"], values["qz"], values["qw"]]
-            values["quaternions"] = data_clean[:, cols]
+            values["quaternions"] = data[:, cols]
 
     return sensor_cols
+
+
+# slices into a list of structure: list_of_rounds(with exo, without exo)[list_of_exercises[list_of_body_region[values]]]
+def get_slices_of_subject(subject_number):
+    subject_number_str = str(subject_number)
+    folder_path = f"Data/CAPTIV/Subject{subject_number_str}"
+    file_prefix_path = f"{folder_path}/subject{subject_number_str}_"
+    json_path = f"{folder_path}/subject{subject_number_str}_slices.json"
+    slices_file = open(json_path)
+    slices_indices = json.load(slices_file)
+
+    config_ohne = f"{folder_path}/subject{subject_number_str}_config_ohne_exo.json"
+    csv_ohne = f"{folder_path}/subject{subject_number_str}_ohne_exo.csv"
+    config_mit = f"{folder_path}/subject{subject_number_str}_config_mit_exo.json"
+    csv_mit = f"{folder_path}/subject{subject_number_str}_mit_exo.csv"
+
+    quats_ohne = extract_quaternions(config_ohne, csv_ohne)
+    quats_mit = extract_quaternions(config_mit, csv_mit)
+
+    subject_slices = []
+
+    for round_name, indices_round in slices_indices.items():
+        round_slices = []
+        if round_name == "ohne_exo":
+            quats = quats_ohne
+        elif round_name == "mit_exo":
+            quats = quats_mit
+        else:
+            continue
+
+        pelvis_quats = quats["Pelvis"]["quaternions"]
+        back_quats = quats["Back"]["quaternions"]
+
+        for exercise_name, indices_exercise in indices_round.items():
+            # Collect all intervals for this exercise
+            slices_pelvis = []
+            slices_back = []
+            for i_start, i_end in indices_exercise:
+                slices_pelvis.append(pelvis_quats[i_start:i_end])
+                slices_back.append(back_quats[i_start:i_end])
+
+            slice_pelvis = np.concatenate(slices_pelvis, axis=0)
+            slice_back = np.concatenate(slices_back, axis=0)
+            round_slices.append((slice_pelvis, slice_back))
+
+        subject_slices.append(round_slices)
+    return subject_slices
+
+
+def get_slices_all_subjects():
+    slices = []
+    for i in range(1, 9):
+        slices.append(get_slices_of_subject(i))
+    return slices
 
 
 def compute_metrics(quaternions_0, quaternions_1):
@@ -118,24 +175,157 @@ def compute_metrics(quaternions_0, quaternions_1):
     return metrics
 
 
+def make_eval_over_exercises(slices):
+    NUMBER_OF_SUBJECTS = len(slices)
+    NUMBER_OF_EXERCISES = len(slices[0][0])
+    METRIC_NAMES = [
+        "max_torsion",
+        "mean_torsion",
+        "max_flexion",
+        "mean_flexion",
+        "max_extension",
+        "mean_extension",
+        "max_total_angle",
+        "mean_total_angle",
+    ]
+
+    reports = [
+        {
+            f"Exercise {ex+1}": {
+                f"Subject {subj+1}": {
+                    "ohne exo": {},
+                    "mit exo": {},
+                }
+                for subj in range(NUMBER_OF_SUBJECTS)
+            }
+        }
+        for ex in range(NUMBER_OF_EXERCISES)
+    ]
+
+    for subj_idx, subject in enumerate(slices):
+        for round_idx, round_slices in enumerate(subject):
+            round_name = "ohne exo" if round_idx == 0 else "mit exo"
+            for ex_idx, (pelvis, back) in enumerate(round_slices):
+                metrics = compute_metrics(pelvis, back)
+                reports[ex_idx][f"Exercise {ex_idx+1}"][f"Subject {subj_idx+1}"][
+                    round_name
+                ] = metrics
+
+    for ex_idx in range(NUMBER_OF_EXERCISES):
+        agg = {"ohne exo": {}, "mit exo": {}, "percent_difference": {}}
+        means = {"ohne exo": {}, "mit exo": {}}
+        for round_name in ["ohne exo", "mit exo"]:
+            vals = {k: [] for k in METRIC_NAMES}
+            for subj_idx in range(NUMBER_OF_SUBJECTS):
+                m = reports[ex_idx][f"Exercise {ex_idx+1}"][
+                    f"Subject {subj_idx+1}"
+                ].get(round_name, {})
+                for k in METRIC_NAMES:
+                    if k in m:
+                        vals[k].append(m[k])
+            for k in METRIC_NAMES:
+                if vals[k]:
+                    mean_val = float(np.mean(vals[k]))
+                    max_val = float(np.max(vals[k]))
+                    agg[round_name][f"mean_{k}"] = mean_val
+                    agg[round_name][f"max_{k}"] = max_val
+                    means[round_name][k] = mean_val
+        # Calculate percent difference for each metric
+        for k in METRIC_NAMES:
+            mean_ohne = means["ohne exo"].get(k, None)
+            mean_mit = means["mit exo"].get(k, None)
+            if mean_ohne is not None and mean_ohne != 0 and mean_mit is not None:
+                percent_diff = 100 * (mean_mit - mean_ohne) / abs(mean_ohne)
+                agg["percent_difference"][k] = percent_diff
+            else:
+                agg["percent_difference"][k] = None
+        reports[ex_idx][f"Exercise {ex_idx+1}"]["All subjects"] = agg
+
+        os.makedirs("Data/CAPTIV/evaluations", exist_ok=True)
+        with open(
+            f"Data/CAPTIV/evaluations/evaluations_exercise_{ex_idx+1}.json", "w"
+        ) as f:
+            json.dump(reports[ex_idx], f, indent=4)
+
+
+def make_eval_concat(slices):
+    NUMBER_OF_SUBJECTS = len(slices)
+    METRIC_NAMES = [
+        "max_torsion",
+        "mean_torsion",
+        "max_flexion",
+        "mean_flexion",
+        "max_extension",
+        "mean_extension",
+        "max_total_angle",
+        "mean_total_angle",
+    ]
+    report_concat = {"concatenated evaluation": {}}
+
+    for subj_idx, subject in enumerate(slices):
+        pelvis_ohne = np.concatenate([ex[0] for ex in subject[0]], axis=0)
+        back_ohne = np.concatenate([ex[1] for ex in subject[0]], axis=0)
+        pelvis_mit = np.concatenate([ex[0] for ex in subject[1]], axis=0)
+        back_mit = np.concatenate([ex[1] for ex in subject[1]], axis=0)
+
+        metrics_ohne = compute_metrics(pelvis_ohne, back_ohne)
+        metrics_mit = compute_metrics(pelvis_mit, back_mit)
+
+        report_concat["concatenated evaluation"][f"Subject {subj_idx+1}"] = {
+            "ohne exo": metrics_ohne,
+            "mit exo": metrics_mit,
+        }
+
+    agg = {"ohne exo": {}, "mit exo": {}, "percent_difference": {}}
+    means = {"ohne exo": {}, "mit exo": {}}
+    for round_name in ["ohne exo", "mit exo"]:
+        vals = {k: [] for k in METRIC_NAMES}
+        for subj_idx in range(NUMBER_OF_SUBJECTS):
+            m = report_concat["concatenated evaluation"][f"Subject {subj_idx+1}"][
+                round_name
+            ]
+            for k in METRIC_NAMES:
+                if k in m:
+                    vals[k].append(m[k])
+        for k in METRIC_NAMES:
+            if vals[k]:
+                mean_val = float(np.mean(vals[k]))
+                max_val = float(np.max(vals[k]))
+                agg[round_name][f"mean_{k}"] = mean_val
+                agg[round_name][f"max_{k}"] = max_val
+                means[round_name][k] = mean_val
+    # Calculate percent difference for each metric
+    for k in METRIC_NAMES:
+        mean_ohne = means["ohne exo"].get(k, None)
+        mean_mit = means["mit exo"].get(k, None)
+        if mean_ohne is not None and mean_ohne != 0 and mean_mit is not None:
+            percent_diff = 100 * (mean_mit - mean_ohne) / abs(mean_ohne)
+            agg["percent_difference"][k] = percent_diff
+        else:
+            agg["percent_difference"][k] = None
+    report_concat["concatenated evaluation"]["All Subjects total"] = agg
+
+    os.makedirs("Data/CAPTIV/evaluations", exist_ok=True)
+    with open("Data/CAPTIV/evaluations/evaluations_concat.json", "w") as f:
+        json.dump(report_concat, f, indent=4)
+
+
+# used to make slices-indices from raw CAPTIV-Data
+def calculate_index(
+    start_time, end_time, frequency=32, time_format="%H:%M:%S.%f", offset=0
+):
+    start_dt = datetime.strptime(start_time, time_format)
+    end_dt = datetime.strptime(end_time, time_format)
+    return int((end_dt - start_dt).total_seconds() * frequency + offset)
+
+
 if __name__ == "__main__":
-    quats1 = extract_quaternions(
-        "Data/CAPTIV/Subject4/config_ohne_exo.json",
-        "Data/CAPTIV/Subject4/subject4_ohne_exo.csv",
-    )
-    metrics1 = compute_metrics(
-        quats1["Pelvis"]["quaternions"], quats1["Back"]["quaternions"]
-    )
-    quats2 = extract_quaternions(
-        "Data/CAPTIV/Subject4/config_mit_exo.json",
-        "Data/CAPTIV/Subject4/subject4_mit_exo.csv",
-    )
-    metrics2 = compute_metrics(
-        quats2["Pelvis"]["quaternions"], quats2["Back"]["quaternions"]
-    )
-    print(metrics1)
-    print(metrics2)
     """
-    parse_avt_to_json("Data/CAPTIV/Subject1/avatar_mit_exo.avt", "test.json")
+    timestamp_start_round = "16:07:13.113"
+    timestamp_current = "16:09:48.207"
+    print(calculate_index(timestamp_start_round, timestamp_current))
     avatar_to_sensor_config("Data/CAPTIV")
     """
+    slices = get_slices_all_subjects()
+    make_eval_over_exercises(slices)
+    make_eval_concat(slices)

@@ -203,6 +203,36 @@ def detect_anomalies_iforest_manual_threshold(
     }
 
 
+def count_char_in_line(file_path, line_number, target_char):
+    """
+    Reads a specific line in a file and counts the number of times
+    a specified character appears in that line.
+
+    Parameters:
+    - file_path (str): Path to the file
+    - line_number (int): Line number to read (1-based index)
+    - target_char (str): Character to count
+
+    Returns:
+    - int: Count of the target character in the specified line
+    """
+    if not isinstance(target_char, str) or len(target_char) != 1:
+        raise ValueError("target_char must be a single character")
+
+    try:
+        with open(file_path, "r", encoding="utf-16") as f:
+            for current_line_number, line in enumerate(f, start=1):
+                if current_line_number == line_number:
+                    return line.count(target_char)
+    except FileNotFoundError:
+        raise FileNotFoundError(f"File not found: {file_path}")
+
+    raise ValueError(f"Line number {line_number} exceeds total lines in the file.")
+
+
+print(count_char_in_line("Data/CAPTIV/Subject5/subject5_ohne_exo.csv", 6397, ","))
+print(count_char_in_line("Data/CAPTIV/Subject5/subject5_ohne_exo.csv", 2000, ","))
+"""
 # Example usage
 if __name__ == "__main__":
     np.random.seed(0)
@@ -213,3 +243,4 @@ if __name__ == "__main__":
 
     result = detect_anomalies_iforest_manual_threshold(ts, std_factor=3, plot=True)
     print("Anomalies at indices:", result["anomaly_indices"])
+"""
