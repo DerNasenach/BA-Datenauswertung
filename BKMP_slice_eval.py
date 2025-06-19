@@ -135,8 +135,8 @@ def make_eval_over_exercises(signals):
 
     reports = [
         {
-            f"Exercise {n}": {
-                f"Subject {i}": {
+            f"exercise {n}": {
+                f"subject {i}": {
                     "ohne exo": {},
                     "mit exo": {},
                 }
@@ -151,10 +151,10 @@ def make_eval_over_exercises(signals):
             max_value_no_exo = np.max(exercise)
             mean_value_no_exo = np.mean(exercise)
 
-            reports[j][f"Exercise {j+1}"][f"Subject {i+1}"]["ohne exo"][
+            reports[j][f"exercise {j+1}"][f"subject {i+1}"]["ohne exo"][
                 "max"
             ] = max_value_no_exo
-            reports[j][f"Exercise {j+1}"][f"Subject {i + 1}"]["ohne exo"][
+            reports[j][f"exercise {j+1}"][f"subject {i + 1}"]["ohne exo"][
                 "mean"
             ] = mean_value_no_exo
 
@@ -165,10 +165,10 @@ def make_eval_over_exercises(signals):
             max_value_with_exo = np.max(exercise)
             mean_value_with_exo = np.mean(exercise)
 
-            reports[j][f"Exercise {j + 1}"][f"Subject {i + 1}"]["mit exo"][
+            reports[j][f"exercise {j + 1}"][f"subject {i + 1}"]["mit exo"][
                 "max"
             ] = max_value_with_exo
-            reports[j][f"Exercise {j + 1}"][f"Subject {i + 1}"]["mit exo"][
+            reports[j][f"exercise {j + 1}"][f"subject {i + 1}"]["mit exo"][
                 "mean"
             ] = mean_value_with_exo
 
@@ -185,7 +185,7 @@ def make_eval_over_exercises(signals):
             )
 
     for i in range(NUMBER_OF_EXERCISES):
-        reports[i][f"Exercise {i + 1}"]["All subjects"] = {
+        reports[i][f"exercise {i + 1}"]["all subjects"] = {
             "ohne exo": {
                 "mean of max": np.mean(max_values_no_exo[i]),
                 "mean of mean": np.mean(mean_values_no_exo[i]),
@@ -195,7 +195,7 @@ def make_eval_over_exercises(signals):
                 "mean of mean": np.mean(mean_values_with_exo[i]),
             },
         }
-        reports[i][f"Exercise {i + 1}"]["statistics"] = {
+        reports[i][f"exercise {i + 1}"]["statistics"] = {
             "max": get_statistical_analysis(
                 diffs_max_values[i], max_values_no_exo[i], max_values_with_exo[i]
             ),
@@ -250,7 +250,7 @@ def make_eval_concat(signals):
         diffs_mean_values.append(round_no_exo_mean - round_with_exo_mean)
         # diffs_power_spikes_values.append(round_no_exo_power_spikes - round_with_exo_power_spikes)
 
-        report_concat["concatenated evaluation"][f"Subject {i}"] = {
+        report_concat["concatenated evaluation"][f"subject {i}"] = {
             "ohne exo": {
                 "max": round_no_exo_max,
                 "mean": round_no_exo_mean,
@@ -270,15 +270,15 @@ def make_eval_concat(signals):
         mean_values_with_exo.append(round_with_exo_mean)
         # power_spikes_values_with_exo.append(round_with_exo_power_spikes)
 
-    report_concat["concatenated evaluation"]["All Subjects total"] = {
+    report_concat["concatenated evaluation"]["all subjects"] = {
         "ohne exo": {
             "mean of max": np.mean(max_values_no_exo),
-            "mean of means": np.mean(mean_values_no_exo),
+            "mean of mean": np.mean(mean_values_no_exo),
             # "mean of power spikes": np.mean(power_spikes_values_no_exo),
         },
         "mit exo": {
             "mean of max": np.mean(max_values_with_exo),
-            "mean of means": np.mean(mean_values_with_exo),
+            "mean of mean": np.mean(mean_values_with_exo),
             # "mean of power spikes": np.mean(power_spikes_values_with_exo),
         },
     }

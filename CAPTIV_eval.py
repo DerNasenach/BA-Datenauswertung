@@ -191,8 +191,8 @@ def make_eval_over_exercises(slices):
 
     reports = [
         {
-            f"Exercise {ex+1}": {
-                f"Subject {subj+1}": {
+            f"exercise {ex+1}": {
+                f"subject {subj+1}": {
                     "ohne exo": {},
                     "mit exo": {},
                 }
@@ -207,7 +207,7 @@ def make_eval_over_exercises(slices):
             round_name = "ohne exo" if round_idx == 0 else "mit exo"
             for ex_idx, (pelvis, back) in enumerate(round_slices):
                 metrics = compute_metrics(pelvis, back)
-                reports[ex_idx][f"Exercise {ex_idx+1}"][f"Subject {subj_idx+1}"][
+                reports[ex_idx][f"exercise {ex_idx+1}"][f"subject {subj_idx+1}"][
                     round_name
                 ] = metrics
 
@@ -217,8 +217,8 @@ def make_eval_over_exercises(slices):
         for round_name in ["ohne exo", "mit exo"]:
             vals = {k: [] for k in METRIC_NAMES}
             for subj_idx in range(NUMBER_OF_SUBJECTS):
-                m = reports[ex_idx][f"Exercise {ex_idx+1}"][
-                    f"Subject {subj_idx+1}"
+                m = reports[ex_idx][f"exercise {ex_idx+1}"][
+                    f"subject {subj_idx+1}"
                 ].get(round_name, {})
                 for k in METRIC_NAMES:
                     if k in m:
@@ -239,7 +239,7 @@ def make_eval_over_exercises(slices):
                 agg["percent_difference"][k] = percent_diff
             else:
                 agg["percent_difference"][k] = None
-        reports[ex_idx][f"Exercise {ex_idx+1}"]["All subjects"] = agg
+        reports[ex_idx][f"exercise {ex_idx+1}"]["all subjects"] = agg
 
         os.makedirs("Data/CAPTIV/evaluations", exist_ok=True)
         with open(
@@ -260,7 +260,7 @@ def make_eval_concat(slices):
         "max_total_angle",
         "mean_total_angle",
     ]
-    report_concat = {"concatenated evaluation": {}}
+    report_concat = {"all exercises": {}}
 
     for subj_idx, subject in enumerate(slices):
         pelvis_ohne = np.concatenate([ex[0] for ex in subject[0]], axis=0)
@@ -271,7 +271,7 @@ def make_eval_concat(slices):
         metrics_ohne = compute_metrics(pelvis_ohne, back_ohne)
         metrics_mit = compute_metrics(pelvis_mit, back_mit)
 
-        report_concat["concatenated evaluation"][f"Subject {subj_idx+1}"] = {
+        report_concat["all exercises"][f"subject {subj_idx+1}"] = {
             "ohne exo": metrics_ohne,
             "mit exo": metrics_mit,
         }
@@ -281,9 +281,7 @@ def make_eval_concat(slices):
     for round_name in ["ohne exo", "mit exo"]:
         vals = {k: [] for k in METRIC_NAMES}
         for subj_idx in range(NUMBER_OF_SUBJECTS):
-            m = report_concat["concatenated evaluation"][f"Subject {subj_idx+1}"][
-                round_name
-            ]
+            m = report_concat["all exercises"][f"subject {subj_idx+1}"][round_name]
             for k in METRIC_NAMES:
                 if k in m:
                     vals[k].append(m[k])
@@ -303,7 +301,7 @@ def make_eval_concat(slices):
             agg["percent_difference"][k] = percent_diff
         else:
             agg["percent_difference"][k] = None
-    report_concat["concatenated evaluation"]["All Subjects total"] = agg
+    report_concat["all exercises"]["all subjects"] = agg
 
     os.makedirs("Data/CAPTIV/evaluations", exist_ok=True)
     with open("Data/CAPTIV/evaluations/evaluations_concat.json", "w") as f:

@@ -30,7 +30,8 @@ MUSCLE_NAMES = {
     7: "Erector spinae right",
 }
 VERBOSE = True
-MULTI_PROCESSING = False
+MULTI_PROCESSING = True
+PLOT_ANOMALY_DETECTION = False
 
 
 def get_median_frequency(signal):
@@ -46,7 +47,7 @@ def get_median_frequency(signal):
 
 # returns a list of int with indices of detected anomalies in the input list
 def detect_anomalies_iforest_windowed_threshold(
-    time_series, window_size=5000, stride=500, std_factor=3, plot=False
+    time_series, window_size=5000, stride=500, std_factor=3, plot=PLOT_ANOMALY_DETECTION
 ):
     if VERBOSE:
         print("Starting anomaly detection")
@@ -98,7 +99,9 @@ def detect_anomalies_iforest_windowed_threshold(
     return anomaly_indices
 
 
-def detect_anomalies_iforest_contamination(time_series, contamination, plot=True):
+def detect_anomalies_iforest_contamination(
+    time_series, contamination, plot=PLOT_ANOMALY_DETECTION
+):
     if VERBOSE:
         print("Starting anomaly detection")
 
@@ -307,9 +310,9 @@ def make_statistics_analysis_from_metrics(evals):
     muscles_differences = []
     reports = [
         {
-            f"Exercise {n}": {
+            f"exercise {n}": {
                 MUSCLE_NAMES[i]: {
-                    f"Subject {j}": {
+                    f"subject {j}": {
                         "ohne exo": {},
                         "mit exo": {},
                     }
@@ -358,27 +361,27 @@ def make_statistics_analysis_from_metrics(evals):
                     - evals[subject_number][exercise_number][muscle_number][2][1]
                 )
 
-                reports[exercise_number][f"Exercise {exercise_number + 1}"][
+                reports[exercise_number][f"exercise {exercise_number + 1}"][
                     MUSCLE_NAMES[muscle_number]
-                ][f"Subject {subject_number +1}"]["ohne exo"] = {
+                ][f"subject {subject_number +1}"]["ohne exo"] = {
                     "max": evals[subject_number][exercise_number][muscle_number][0][0],
                     "mean": evals[subject_number][exercise_number][muscle_number][1][0],
                     "median frequency": evals[subject_number][exercise_number][
                         muscle_number
                     ][2][0],
                 }
-                reports[exercise_number][f"Exercise {exercise_number + 1}"][
+                reports[exercise_number][f"exercise {exercise_number + 1}"][
                     MUSCLE_NAMES[muscle_number]
-                ][f"Subject {subject_number +1}"]["mit exo"] = {
+                ][f"subject {subject_number +1}"]["mit exo"] = {
                     "max": evals[subject_number][exercise_number][muscle_number][0][1],
                     "mean": evals[subject_number][exercise_number][muscle_number][1][1],
                     "median frequency": evals[subject_number][exercise_number][
                         muscle_number
                     ][2][1],
                 }
-                reports[exercise_number][f"Exercise {exercise_number + 1}"][
+                reports[exercise_number][f"exercise {exercise_number + 1}"][
                     MUSCLE_NAMES[muscle_number]
-                ][f"Subject {subject_number +1}"]["difference"] = {
+                ][f"subject {subject_number +1}"]["difference"] = {
                     "reduction max in %": (
                         1
                         - (
@@ -411,7 +414,6 @@ def make_statistics_analysis_from_metrics(evals):
                     * 100,
                 }
 
-        # print(muscle_max_values)
         muscles_values.append(
             (muscle_max_values, muscle_mean_values, muscle_median_freq_values)
         )
@@ -444,20 +446,16 @@ def make_statistics_analysis_from_metrics(evals):
                         median_freq_total_with_exo.append(
                             subject["mit exo"]["median frequency"]
                         )
-                    muscle_values["All Subjects"] = {
+                    muscle_values["all subjects"] = {
                         "ohne exo": {
-                            "mean of max": np.mean(max_total_no_exo),
-                            "mean of means": np.mean(mean_total_no_exo),
-                            "mean of meadian frequency": np.mean(
-                                median_freq_total_no_exo
-                            ),
+                            "max": np.mean(max_total_no_exo),
+                            "mean": np.mean(mean_total_no_exo),
+                            "median frequency": np.mean(median_freq_total_no_exo),
                         },
                         "mit exo": {
-                            "mean of max": np.mean(max_total_with_exo),
-                            "mean of means": np.mean(mean_total_with_exo),
-                            "mean of meadian frequency": np.mean(
-                                median_freq_total_with_exo
-                            ),
+                            "max": np.mean(max_total_with_exo),
+                            "mean": np.mean(mean_total_with_exo),
+                            "median frequency": np.mean(median_freq_total_with_exo),
                         },
                         "difference": {
                             "reduction mean of max in %": (
@@ -493,12 +491,10 @@ def make_statistics_analysis_from_metrics(evals):
             for muscle, data in d.items():
 
                 with open(
-                    f"Data/EMG/evaluations/{exercise}/{muscle}.json", "w"
+                    f"Data/EMG/evaluations/{exercise}/{muscle.replace(' ', '_')}.json",
+                    "w",
                 ) as file:
                     json.dump(data, file, indent=4)
-
-    # for i in range(0, 8):
-    #   make_statistical_analysis(i, muscles_values[i], muscles_differences[i])
 
     # Aggregate evaluation
     if VERBOSE:
@@ -524,7 +520,7 @@ def make_statistics_analysis_from_metrics(evals):
             all_raw_with_exo = np.array(all_raw_with_exo)
 
             aggregate_report[MUSCLE_NAMES[muscle_number]][
-                f"Subject {subject_number + 1}"
+                f"subject {subject_number + 1}"
             ] = {
                 "ohne exo": {
                     "max": np.max(all_raw_no_exo),
@@ -568,7 +564,7 @@ def make_statistics_analysis_from_metrics(evals):
         all_subjects_raw_no_exo = np.array(all_subjects_raw_no_exo)
         all_subjects_raw_with_exo = np.array(all_subjects_raw_with_exo)
 
-        aggregate_report[MUSCLE_NAMES[muscle_number]]["All Subjects"] = {
+        aggregate_report[MUSCLE_NAMES[muscle_number]]["all subjects"] = {
             "ohne exo": {
                 "max": float(np.max(all_subjects_raw_no_exo)),
                 "mean": float(np.mean(all_subjects_raw_no_exo)),
@@ -604,7 +600,9 @@ def make_statistics_analysis_from_metrics(evals):
     # Save aggregate report
     os.makedirs("Data/EMG/evaluations/aggregate", exist_ok=True)
     for muscle, data in aggregate_report.items():
-        with open(f"Data/EMG/evaluations/aggregate/{muscle}.json", "w") as file:
+        with open(
+            f"Data/EMG/evaluations/aggregate/{muscle.replace(' ', '_')}.json", "w"
+        ) as file:
             json.dump(data, file, indent=4)
 
 
