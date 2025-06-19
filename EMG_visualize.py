@@ -62,6 +62,69 @@ def visualize_emg_values(ax, json_path, title):
     return bars1, bars2
 
 
+# List of all muscle filenames and pretty names
+muscles = [
+    ("Biceps_femoris_left.json", "Biceps femoris left"),
+    ("Biceps_femoris_right.json", "Biceps femoris right"),
+    ("Quadriceps_left.json", "Quadriceps left"),
+    ("Quadriceps_right.json", "Quadriceps right"),
+    ("Gluteus_maximus_left.json", "Gluteus maximus left"),
+    ("Gluteus_maximus_right.json", "Gluteus maximus right"),
+    ("Erector_spinae_left.json", "Erector spinae left"),
+    ("Erector_spinae_right.json", "Erector spinae right"),
+]
+
+base_path = "Data/EMG/evaluations"
+
+for muscle_file, muscle_name in muscles:
+    params = [
+        [os.path.join(base_path, "aggregate", muscle_file), "All Exercises"],
+    ]
+    params += [
+        [os.path.join(base_path, f"Exercise {n}", muscle_file), f"Exercise {n}"]
+        for n in range(1, 7)
+    ]
+
+    fig = plt.figure(figsize=(18, 10))
+    gs = gridspec.GridSpec(3, 3, height_ratios=[1, 1, 1])
+
+    # First row: All Exercises (spanning all columns)
+    ax_all = fig.add_subplot(gs[0, :])
+    bars1, bars2 = visualize_emg_values(ax_all, params[0][0], params[0][1])
+    all_bars = (bars1, bars2)
+
+    # Next 6: Exercises 1-6 in 2 rows, 3 columns each
+    axes = []
+    for i in range(6):
+        row = 1 + i // 3
+        col = i % 3
+        ax = fig.add_subplot(gs[row, col])
+        visualize_emg_values(ax, params[i + 1][0], params[i + 1][1])
+        axes.append(ax)
+
+    fig.legend(
+        [all_bars[0], all_bars[1]],
+        ["ohne exo", "mit exo"],
+        loc="upper center",
+        ncol=2,
+        bbox_to_anchor=(0.5, 1.02),
+        fontsize="large",
+    )
+    fig.suptitle(
+        f"EMG: Max, Mean, and Median Frequency (ohne exo vs mit exo)\n{muscle_name}",
+        fontsize=16,
+        y=1.06,
+    )
+    plt.tight_layout(rect=[0, 0, 1, 0.98])
+    fig.savefig(
+        os.path.join(base_path, f"{muscle_name.replace(' ', '_')}_overview.png"),
+        dpi=300,
+        bbox_inches="tight",
+    )
+    plt.close(fig)
+
+
+"""
 # Prepare file paths and titles
 base_path = "Data/EMG/evaluations"
 muscle = "Biceps_femoris_left.json"
@@ -111,3 +174,4 @@ fig.savefig(
 )
 
 plt.show()
+"""
