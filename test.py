@@ -230,8 +230,8 @@ def count_char_in_line(file_path, line_number, target_char):
     raise ValueError(f"Line number {line_number} exceeds total lines in the file.")
 
 
-print(count_char_in_line("Data/CAPTIV/Subject5/subject5_ohne_exo.csv", 6397, ","))
-print(count_char_in_line("Data/CAPTIV/Subject5/subject5_ohne_exo.csv", 2000, ","))
+# print(count_char_in_line("Data/CAPTIV/Subject5/subject5_ohne_exo.csv", 6397, ","))
+# print(count_char_in_line("Data/CAPTIV/Subject5/subject5_ohne_exo.csv", 2000, ","))
 """
 # Example usage
 if __name__ == "__main__":
@@ -244,3 +244,72 @@ if __name__ == "__main__":
     result = detect_anomalies_iforest_manual_threshold(ts, std_factor=3, plot=True)
     print("Anomalies at indices:", result["anomaly_indices"])
 """
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import generic_filter
+
+
+def rms(time_series):
+    """
+    Returns the Root-Mean-Square of a time series.
+    """
+    return np.sqrt(np.mean(time_series**2))
+
+
+def wrms_generic(time_series, window_size=50):
+    """
+    Returns a windowed Root-Mean-Square of a time series using a generic filter.
+    """
+    return generic_filter(time_series, rms, size=window_size)
+
+
+def wrms_manual(time_series, window_size=50):
+    """
+    Returns a windowed Root-Mean-Square of a time series using a manual approach.
+    """
+    n = len(time_series)
+    result = np.zeros(n)
+
+    for i in range(n):
+        # Define the window boundaries
+        start = max(0, i - window_size // 2)
+        end = min(n, i + window_size // 2 + 1)
+
+        # Extract the windowed time series
+        window = time_series[start:end]
+
+        # Calculate the RMS for the current window
+        result[i] = rms(window)
+
+    return result
+
+
+def generate_random_time_series(length=1000, noise_level=0.5):
+    """
+    Generates a random time series with a specified length and noise level.
+    """
+    time_series = np.random.normal(0, noise_level, length)
+    return time_series
+
+
+# Generate a random time series
+length = 1000
+time_series = generate_random_time_series(length)
+
+# Compute WRMS using both methods
+window_size = 50
+wrms_gen = wrms_generic(time_series, window_size)
+wrms_man = wrms_manual(time_series, window_size)
+
+# Plotting the results
+plt.figure(figsize=(12, 6))
+plt.plot(time_series, label="Random Time Series", alpha=0.5)
+plt.plot(wrms_gen, label="WRMS (Generic Filter)", color="orange")
+plt.plot(wrms_man, label="WRMS (Manual)", color="green")
+plt.title("Comparison of WRMS Approaches")
+plt.xlabel("Sample Index")
+plt.ylabel("Value")
+plt.legend()
+plt.grid()
+plt.show()

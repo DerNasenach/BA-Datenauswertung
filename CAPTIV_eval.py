@@ -23,18 +23,21 @@ TRANSLATION_MAP_UNUSED = {
 }
 
 
-# extracts sensor configuration from an avatar.avt file, writes to json
 def parse_avt_to_json(input_path, output_path):
+    """
+    parses an .avt avatar file to exrtact sensor configuration.
+    Maps french sensor names to english, collects sensor IDs, and writes mapping to .json file.
+    """
     mapping = {}
     with open(input_path, "r", encoding="utf-16") as file:
         content = file.readlines()
         for i, line in enumerate(content):
             line = line.replace("\x00", "").strip()
             if not line or line.lower() == "true":
-                continue
+                continue  # skip empty lines and 'true'
             if line in TRANSLATION_MAP_USED:
                 french_name = line
-                sensor_id = content[i + 2].split()[1][3:]
+                sensor_id = content[i + 2].split()[1][3:]  # extract sensor id
                 english_name = TRANSLATION_MAP_USED[french_name]
                 mapping[sensor_id] = english_name
 
@@ -42,8 +45,8 @@ def parse_avt_to_json(input_path, output_path):
         json.dump(mapping, json_file, indent=4)
 
 
-# parses all .avt files in all subdirectories of the specified directory into a config.json
 def avatar_to_sensor_config(base_dir):
+    # parses all .avt files in all subdirectories of the specified directory into a config.json
     for subdir in os.listdir(base_dir):
         subdir_path = os.path.join(base_dir, subdir)
         if os.path.isdir(subdir_path):
@@ -57,16 +60,23 @@ def avatar_to_sensor_config(base_dir):
 
 
 def extract_quaternions(config_path, csv_path):
+    """
+    Loads sensor configuration and extracts quaternion data for each sensor from a .csv file
+    returns a dictionary mapping body parts to lists of quaternions.
+    """
     with open(config_path, "r", encoding="utf-8") as f:
         config = json.load(f)
 
     sensor_cols = {bodypart: {"sensor_id": sid} for sid, bodypart in config.items()}
     with open(csv_path, "r", encoding="utf-16") as f:
+
+        # find header line
         for line in f:
             if line.startswith("Time,"):
                 header = line.strip().split(",")
                 break
 
+        # store column index for each axis of each sensor
         for idx, col in enumerate(header):
             if " " in col:
                 axis, sensor_id = col.split()
@@ -75,11 +85,8 @@ def extract_quaternions(config_path, csv_path):
                         if v["sensor_id"] == sensor_id:
                             v[axis] = idx
 
-        # read data to 2d np.array. data always ends with ',' - skip last column
+        # read data to 2d np.array. data always ends with ',' -> skip last column
         data = np.genfromtxt(f, delimiter=",", filling_values=np.nan)[:, :-1]
-
-        # some sensors end their collection slightly early, skip end rows that contain missing data to keep dimensions equal
-        # data_clean = data[~np.isnan(data).any(axis=1)]
 
         for _, values in sensor_cols.items():
             cols = [values["qx"], values["qy"], values["qz"], values["qw"]]
@@ -88,11 +95,13 @@ def extract_quaternions(config_path, csv_path):
     return sensor_cols
 
 
-# slices into a list of structure: list_of_rounds(with exo, without exo)[list_of_exercises[list_of_body_region[values]]]
 def get_slices_of_subject(subject_number):
+    """
+    loads slice indices and extracts quaternion slices for pelvis and back for each round and exercise.
+    retruns nested list: [round][exercise][(pelvis_quats, back_quats)].
+    """
     subject_number_str = str(subject_number)
     folder_path = f"Data/CAPTIV/Subject{subject_number_str}"
-    file_prefix_path = f"{folder_path}/subject{subject_number_str}_"
     json_path = f"{folder_path}/subject{subject_number_str}_slices.json"
     slices_file = open(json_path)
     slices_indices = json.load(slices_file)
@@ -119,7 +128,7 @@ def get_slices_of_subject(subject_number):
         pelvis_quats = quats["Pelvis"]["quaternions"]
         back_quats = quats["Back"]["quaternions"]
 
-        for exercise_name, indices_exercise in indices_round.items():
+        for _, indices_exercise in indices_round.items():
             # Collect all intervals for this exercise
             slices_pelvis = []
             slices_back = []
@@ -136,6 +145,7 @@ def get_slices_of_subject(subject_number):
 
 
 def get_slices_all_subjects():
+    # collects slices for all subjects
     slices = []
     for i in range(1, 9):
         slices.append(get_slices_of_subject(i))
@@ -155,8 +165,9 @@ def compute_metrics(quaternions_0, quaternions_1):
     flexion = euler[:, 0]
     torsion = np.abs(euler[:, 1])
 
-    # print(flexion)
-    extension = -np.minimum(flexion, 0)
+    extension = -np.minimum(
+        flexion, 0
+    )  # lowest value below 0, if exists, then removes sign (extension is negative flexion)
     flexion = np.maximum(flexion, 0)
 
     # Euclidian Norm
@@ -176,6 +187,7 @@ def compute_metrics(quaternions_0, quaternions_1):
 
 
 def make_eval_over_exercises(slices):
+    # calculates metrics for each exercise and writes reports to json
     NUMBER_OF_SUBJECTS = len(slices)
     NUMBER_OF_EXERCISES = len(slices[0][0])
     METRIC_NAMES = [
@@ -202,9 +214,11 @@ def make_eval_over_exercises(slices):
         for ex in range(NUMBER_OF_EXERCISES)
     ]
 
+    # get metrics for each subejct, round and exercise
     for subj_idx, subject in enumerate(slices):
         for round_idx, round_slices in enumerate(subject):
             round_name = "ohne exo" if round_idx == 0 else "mit exo"
+
             for ex_idx, (pelvis, back) in enumerate(round_slices):
                 metrics = compute_metrics(pelvis, back)
                 reports[ex_idx][f"exercise {ex_idx+1}"][f"subject {subj_idx+1}"][
@@ -214,6 +228,8 @@ def make_eval_over_exercises(slices):
     for ex_idx in range(NUMBER_OF_EXERCISES):
         agg = {"ohne exo": {}, "mit exo": {}, "percent_difference": {}}
         means = {"ohne exo": {}, "mit exo": {}}
+
+        # compute mean and max for each metric, write to dictionary
         for round_name in ["ohne exo", "mit exo"]:
             vals = {k: [] for k in METRIC_NAMES}
             for subj_idx in range(NUMBER_OF_SUBJECTS):
@@ -230,11 +246,14 @@ def make_eval_over_exercises(slices):
                     agg[round_name][f"mean_{k}"] = mean_val
                     agg[round_name][f"max_{k}"] = max_val
                     means[round_name][k] = mean_val
+
         # Calculate percent difference for each metric
         for k in METRIC_NAMES:
             mean_ohne = means["ohne exo"].get(k, None)
             mean_mit = means["mit exo"].get(k, None)
-            if mean_ohne is not None and mean_ohne != 0 and mean_mit is not None:
+            if (
+                mean_ohne is not None and mean_ohne != 0 and mean_mit is not None
+            ):  # prevent division by 0
                 percent_diff = 100 * (mean_mit - mean_ohne) / abs(mean_ohne)
                 agg["percent_difference"][k] = percent_diff
             else:
@@ -249,6 +268,7 @@ def make_eval_over_exercises(slices):
 
 
 def make_eval_concat(slices):
+    # calculates metrics concatenated over all exercises and writes report to json
     NUMBER_OF_SUBJECTS = len(slices)
     METRIC_NAMES = [
         "max_torsion",
@@ -262,6 +282,7 @@ def make_eval_concat(slices):
     ]
     report_concat = {"all exercises": {}}
 
+    # concatenate indices (cutting out jumps) and compute metrics
     for subj_idx, subject in enumerate(slices):
         pelvis_ohne = np.concatenate([ex[0] for ex in subject[0]], axis=0)
         back_ohne = np.concatenate([ex[1] for ex in subject[0]], axis=0)
@@ -278,6 +299,8 @@ def make_eval_concat(slices):
 
     agg = {"ohne exo": {}, "mit exo": {}, "percent_difference": {}}
     means = {"ohne exo": {}, "mit exo": {}}
+
+    # compute mean and max and write to dictionary
     for round_name in ["ohne exo", "mit exo"]:
         vals = {k: [] for k in METRIC_NAMES}
         for subj_idx in range(NUMBER_OF_SUBJECTS):
@@ -292,6 +315,7 @@ def make_eval_concat(slices):
                 agg[round_name][f"mean_{k}"] = mean_val
                 agg[round_name][f"max_{k}"] = max_val
                 means[round_name][k] = mean_val
+
     # Calculate percent difference for each metric
     for k in METRIC_NAMES:
         mean_ohne = means["ohne exo"].get(k, None)
@@ -303,15 +327,16 @@ def make_eval_concat(slices):
             agg["percent_difference"][k] = None
     report_concat["all exercises"]["all subjects"] = agg
 
+    # write to file
     os.makedirs("Data/CAPTIV/evaluations", exist_ok=True)
     with open("Data/CAPTIV/evaluations/evaluations_concat.json", "w") as f:
         json.dump(report_concat, f, indent=4)
 
 
-# used to make slices-indices from raw CAPTIV-Data
 def calculate_index(
     start_time, end_time, frequency=32, time_format="%H:%M:%S.%f", offset=0
 ):
+    # used to manually make slices-indices from raw CAPTIV-Data
     start_dt = datetime.strptime(start_time, time_format)
     end_dt = datetime.strptime(end_time, time_format)
     return int((end_dt - start_dt).total_seconds() * frequency + offset)
@@ -319,11 +344,12 @@ def calculate_index(
 
 if __name__ == "__main__":
     """
+    example usage of calculate index, write to .json manually:
     timestamp_start_round = "16:07:13.113"
     timestamp_current = "16:09:48.207"
     print(calculate_index(timestamp_start_round, timestamp_current))
-    avatar_to_sensor_config("Data/CAPTIV")
     """
+    # avatar_to_sensor_config("Data/CAPTIV")
     slices = get_slices_all_subjects()
     make_eval_over_exercises(slices)
     make_eval_concat(slices)

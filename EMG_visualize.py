@@ -5,65 +5,10 @@ import os
 import numpy as np
 
 
-def visualize_emg_values(ax, json_path, title):
-    with open(json_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    # Use "all subjects" for exercise files, "all subjects" for aggregate
-    all_total = data["all subjects"]
-
-    metrics = [
-        ("max", "Max"),
-        ("mean", "Mean"),
-        ("median frequency", "Median Freq."),
-    ]
-
-    ohne = all_total["ohne exo"]
-    mit = all_total["mit exo"]
-
-    ohne_vals = [ohne[key] for key, _ in metrics]
-    mit_vals = [mit[key] for key, _ in metrics]
-    labels = [label for _, label in metrics]
-
-    baseline = [100 for _ in ohne_vals]
-    relative = [
-        100 * mit_val / ohne_val if ohne_val != 0 else 0
-        for mit_val, ohne_val in zip(mit_vals, ohne_vals)
-    ]
-
-    x = range(len(labels))
-    width = 0.35
-
-    bars1 = ax.bar(
-        [i - width / 2 for i in x], baseline, width, label="ohne exo", color="#4F81BD"
-    )
-    bars2 = ax.bar(
-        [i + width / 2 for i in x], relative, width, label="mit exo", color="#C0504D"
-    )
-
-    # Annotate bars with values
-    for bar, val in zip(bars2, relative):
-        ax.annotate(
-            f"{val:.1f}%",
-            xy=(bar.get_x() + bar.get_width() / 2, bar.get_height()),
-            xytext=(0, 5),
-            textcoords="offset points",
-            ha="center",
-            va="bottom",
-            fontsize=10,
-            color=bar.get_facecolor(),
-            fontweight="bold",
-        )
-
-    ax.set_ylabel("Value")
-    ax.set_title(title)
-    ax.set_xticks(list(x))
-    ax.set_xticklabels(labels)
-    ax.set_ylim(0, max(baseline + relative) * 1.2)
-    return bars1, bars2
-
-
 def visualize_absolute_emg_values(ax, json_path, title):
+    """
+    plots absolute EMG values for max, mean and median frequency
+    """
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
@@ -85,6 +30,7 @@ def visualize_absolute_emg_values(ax, json_path, title):
     x = range(len(labels))
     width = 0.35
 
+    # plot metrics
     bars1 = ax.bar(
         [i - width / 2 for i in x], ohne_vals, width, label="ohne exo", color="#4F81BD"
     )
@@ -92,7 +38,7 @@ def visualize_absolute_emg_values(ax, json_path, title):
         [i + width / 2 for i in x], mit_vals, width, label="mit exo", color="#C0504D"
     )
 
-    # Annotate "mit exo" bars with percentage difference
+    # Annotate with percentage difference
     for i, (bar, ohne_val, mit_val) in enumerate(zip(bars2, ohne_vals, mit_vals)):
         if ohne_val != 0:
             perc_diff = 100 * (mit_val - ohne_val) / ohne_val
@@ -121,6 +67,9 @@ def visualize_absolute_emg_values(ax, json_path, title):
 
 
 def plot_emg_radar(muscle_files, base_path, out_path_prefix):
+    """
+    plots radar diagrams for all muscles and metrics max, mean and median frequency
+    """
     metrics = [
         ("max", "Max (mV)"),
         ("mean", "Mean (mV)"),
@@ -144,25 +93,19 @@ def plot_emg_radar(muscle_files, base_path, out_path_prefix):
         mit_vals = {metric: [] for metric, _ in metrics}
         for muscle_file, _ in muscle_files:
             json_path = os.path.join(ex_file, muscle_file)
-            try:
-                with open(json_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                all_total = data["all subjects"]
-                ohne = all_total["ohne exo"]
-                mit = all_total["mit exo"]
-                for metric, _ in metrics:
-                    ohne_vals[metric].append(ohne[metric])
-                    mit_vals[metric].append(mit[metric])
-            except Exception as e:
-                # If file missing or data missing, fill with 0
-                for metric, _ in metrics:
-                    ohne_vals[metric].append(0)
-                    mit_vals[metric].append(0)
+            with open(json_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            all_total = data["all subjects"]
+            ohne = all_total["ohne exo"]
+            mit = all_total["mit exo"]
+            for metric, _ in metrics:
+                ohne_vals[metric].append(ohne[metric])
+                mit_vals[metric].append(mit[metric])
 
         # Radar plot setup
         num_vars = len(muscle_labels)
         angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False).tolist()
-        angles += angles[:1]  # close the loop
+        angles += angles[:1]
 
         fig, axs = plt.subplots(1, 3, subplot_kw=dict(polar=True), figsize=(18, 6))
         if not isinstance(axs, np.ndarray):
@@ -184,15 +127,15 @@ def plot_emg_radar(muscle_files, base_path, out_path_prefix):
             ax.set_title(metric_label, size=14, y=1.1)
             ax.grid(True)
 
-            for i, angle in enumerate(angles[:-1]):  # skip the closing point
+            # Annotate percentage change between no exo and with exo
+            for i, angle in enumerate(angles[:-1]):
 
-                # Annotate percentage change between "ohne exo" and "mit exo"
                 if values_ohne[i] != 0:
                     perc = 100 * (values_mit[i] - values_ohne[i]) / values_ohne[i]
                     sign = "+" if perc >= 0 else ""
                     perc_text = f"{sign}{perc:.1f}%"
                 else:
-                    perc_text = "n/a"
+                    perc_text = ""
                 higher = max(values_ohne[i], values_mit[i])
                 offset = 0.07 * max(values_ohne + values_mit)
                 ax.text(
@@ -206,7 +149,6 @@ def plot_emg_radar(muscle_files, base_path, out_path_prefix):
                     fontweight="bold",
                 )
 
-            # Set y-labels
             ax.set_ylabel("", labelpad=20)
 
         axs[0].legend(loc="upper left", bbox_to_anchor=(1.1, 1.1), fontsize=12)
@@ -216,65 +158,69 @@ def plot_emg_radar(muscle_files, base_path, out_path_prefix):
         plt.close(fig)
 
 
-# List of all muscle filenames and pretty names
-muscles = [
-    ("Biceps_femoris_left.json", "Biceps femoris left"),
-    ("Biceps_femoris_right.json", "Biceps femoris right"),
-    ("Quadriceps_left.json", "Quadriceps left"),
-    ("Quadriceps_right.json", "Quadriceps right"),
-    ("Gluteus_maximus_left.json", "Gluteus maximus left"),
-    ("Gluteus_maximus_right.json", "Gluteus maximus right"),
-    ("Erector_spinae_left.json", "Erector spinae left"),
-    ("Erector_spinae_right.json", "Erector spinae right"),
-]
+if __name__ == "__main__":
+    """
+    main execution: plot bar and radar diagrams for all muscles and exercises
+    """
 
-base_path = "Data/EMG/evaluations"
-
-plot_emg_radar(muscles, base_path, os.path.join(base_path, "EMG"))
-
-for muscle_file, muscle_name in muscles:
-    params = [
-        [os.path.join(base_path, "aggregate", muscle_file), "All Exercises"],
-    ]
-    params += [
-        [os.path.join(base_path, f"Exercise {n}", muscle_file), f"Exercise {n}"]
-        for n in range(1, 7)
+    muscles = [
+        ("Biceps_femoris_left.json", "Biceps femoris left"),
+        ("Biceps_femoris_right.json", "Biceps femoris right"),
+        ("Quadriceps_left.json", "Quadriceps left"),
+        ("Quadriceps_right.json", "Quadriceps right"),
+        ("Gluteus_maximus_left.json", "Gluteus maximus left"),
+        ("Gluteus_maximus_right.json", "Gluteus maximus right"),
+        ("Erector_spinae_left.json", "Erector spinae left"),
+        ("Erector_spinae_right.json", "Erector spinae right"),
     ]
 
-    fig = plt.figure(figsize=(18, 10))
-    gs = gridspec.GridSpec(3, 3, height_ratios=[1, 1, 1])
+    base_path = "Data/EMG/evaluations"
 
-    # First row: All Exercises (spanning all columns)
-    ax_all = fig.add_subplot(gs[0, :])
-    bars1, bars2 = visualize_absolute_emg_values(ax_all, params[0][0], params[0][1])
-    all_bars = (bars1, bars2)
+    plot_emg_radar(muscles, base_path, os.path.join(base_path, "EMG"))
 
-    # Next 6: Exercises 1-6 in 2 rows, 3 columns each
-    axes = []
-    for i in range(6):
-        row = 1 + i // 3
-        col = i % 3
-        ax = fig.add_subplot(gs[row, col])
-        visualize_absolute_emg_values(ax, params[i + 1][0], params[i + 1][1])
-        axes.append(ax)
+    for muscle_file, muscle_name in muscles:
+        params = [
+            [os.path.join(base_path, "aggregate", muscle_file), "All Exercises"],
+        ]
+        params += [
+            [os.path.join(base_path, f"Exercise {n}", muscle_file), f"Exercise {n}"]
+            for n in range(1, 7)
+        ]
 
-    fig.legend(
-        [all_bars[0], all_bars[1]],
-        ["ohne exo", "mit exo"],
-        loc="upper center",
-        ncol=2,
-        bbox_to_anchor=(0.5, 1.02),
-        fontsize="large",
-    )
-    fig.suptitle(
-        f"EMG: Max, Mean, and Median Frequency (ohne exo vs mit exo)\n{muscle_name}",
-        fontsize=16,
-        y=1.06,
-    )
-    plt.tight_layout(rect=[0, 0, 1, 0.98])
-    fig.savefig(
-        os.path.join(base_path, f"EMG_bars_{muscle_name.replace(' ', '_')}.png"),
-        dpi=300,
-        bbox_inches="tight",
-    )
-    plt.close(fig)
+        fig = plt.figure(figsize=(18, 10))
+        gs = gridspec.GridSpec(3, 3, height_ratios=[1, 1, 1])
+
+        # First row: All Exercises (spanning all columns)
+        ax_all = fig.add_subplot(gs[0, :])
+        bars1, bars2 = visualize_absolute_emg_values(ax_all, params[0][0], params[0][1])
+        all_bars = (bars1, bars2)
+
+        # Next 6: Exercises 1-6 in 2 rows, 3 columns each
+        axes = []
+        for i in range(6):
+            row = 1 + i // 3
+            col = i % 3
+            ax = fig.add_subplot(gs[row, col])
+            visualize_absolute_emg_values(ax, params[i + 1][0], params[i + 1][1])
+            axes.append(ax)
+
+        fig.legend(
+            [all_bars[0], all_bars[1]],
+            ["ohne exo", "mit exo"],
+            loc="upper center",
+            ncol=2,
+            bbox_to_anchor=(0.5, 1.02),
+            fontsize="large",
+        )
+        fig.suptitle(
+            f"EMG: Max, Mean, and Median Frequency (ohne exo vs mit exo)\n{muscle_name}",
+            fontsize=16,
+            y=1.06,
+        )
+        plt.tight_layout(rect=[0, 0, 1, 0.98])
+        fig.savefig(
+            os.path.join(base_path, f"EMG_bars_{muscle_name.replace(' ', '_')}.png"),
+            dpi=300,
+            bbox_inches="tight",
+        )
+        plt.close(fig)

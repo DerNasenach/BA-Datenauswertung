@@ -1,9 +1,10 @@
 import json
 
 # Concatenates the slice indices for each exercise of a round and appends them to the round
+# (not used in final analysis)
 
 for i in range(1, 9):
-    json_path = "Data/EMG/Subject" + str(i) + "/subject" + str(i) + "_slices.json"
+    json_path = f"Data/EMG/Subject{i}/subject{i}_slices.json"
     infile = json.load(open(json_path))
     for trial in infile.values():
         all_exercises = []

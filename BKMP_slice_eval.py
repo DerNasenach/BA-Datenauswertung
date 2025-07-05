@@ -1,8 +1,6 @@
 import os
-import matplotlib.pyplot as plt
 import json
 import numpy as np
-from scipy.signal import welch
 from scipy.stats import shapiro
 from scipy.stats import ttest_rel
 from scipy.stats import wilcoxon
@@ -16,8 +14,12 @@ HEADER_ROW = 16
 DATA_START_ROW = 18
 
 
-# extracts the n-th column of the specified file
 def extract_column(file_path, n=Z_FILTERED_COLUMN, start_row=DATA_START_ROW):
+    """
+    extracts the n-th column (default: Z_FILTERED_COLUMN) from a tab-separated file,
+    starting from a specific row. Retruns column name, data, and time values.
+    Is used for extracting the Fy-Signal from the .acp output files of the ground force plate
+    """
     data = []
     time = []
     with open(file_path, "r") as file:
@@ -32,8 +34,12 @@ def extract_column(file_path, n=Z_FILTERED_COLUMN, start_row=DATA_START_ROW):
     return name, data, time
 
 
-# slices the acquired data of specified subject based on indices in the corresponding json
 def get_slices_of_subject(subject_number):
+    """
+    Loads the slice indices for a subject from its .json file and extracts the corresponding
+    signal slices from the .acp files for each round and each exercise.
+    Returns a nested list: [round][exercise][signal values].
+    """
     subject_number_str = str(subject_number)
     folder_path = "Data/BKMP/Subject" + subject_number_str
     file_prefix_path = folder_path + "/subject" + subject_number_str + "_"
@@ -62,14 +68,23 @@ def get_slices_of_subject(subject_number):
 
 
 def get_slices_all_subjects():
+    """
+    Collects the sliced signals for all subjects.
+    returns a nested list: [subject][round][exercise][signal values]
+    """
     slices = []
     for i in range(1, NUMBER_OF_SUBJECTS + 1):
         slices.append(get_slices_of_subject(i))
     return slices
 
 
-# calculates basic statistical analysis over dataset, return report as dict
 def get_statistical_analysis(differences, values1, values2):
+    """
+    (not used in final analysis)
+    perform statistical analysis over dataset
+    return report as dictionary
+    """
+
     _, p = shapiro(differences)
 
     mean_diff = np.mean(differences)
@@ -77,7 +92,7 @@ def get_statistical_analysis(differences, values1, values2):
 
     # differences are normally distributed, use paired t-test
     if p > 0.05:
-        t_stat, p = ttest_rel(values1, values2)
+        _, p = ttest_rel(values1, values2)
 
         # Compute Cohen's d-value for effect size
         d = mean_diff / std_diff
@@ -93,7 +108,7 @@ def get_statistical_analysis(differences, values1, values2):
 
     # differences are not normally distributed, use wilcoxon signed-rank test
     else:
-        stat, p = wilcoxon(values1, values2)
+        _, p = wilcoxon(values1, values2)
 
         # Compute effect size
         z = norm.ppf(1 - p / 2)
@@ -109,6 +124,7 @@ def get_statistical_analysis(differences, values1, values2):
         else:
             effect_size += ". large effect"
 
+    # compute confidence interval
     ci_low = mean_diff - 1.96 * (std_diff / np.sqrt(len(differences)))
     ci_high = mean_diff + 1.96 * (std_diff / np.sqrt(len(differences)))
 
@@ -122,8 +138,12 @@ def get_statistical_analysis(differences, values1, values2):
     }
 
 
-# calculates mean, max and statistical analysis differentiated over all exercises. Writes reports to json
 def make_eval_over_exercises(signals):
+    """
+    calculates the mean and max values for each subject, round and exercise,
+    computes differences, and performs statistical analysis.
+    Writes a .json report for each exercise.
+    """
     max_values_no_exo = [[] for _ in range(NUMBER_OF_EXERCISES)]
     mean_values_no_exo = [[] for _ in range(NUMBER_OF_EXERCISES)]
 
@@ -146,6 +166,7 @@ def make_eval_over_exercises(signals):
         for n in range(1, NUMBER_OF_EXERCISES + 1)
     ]
 
+    # Loop over all subjects and exercises to collect statistics
     for i, subject in enumerate(signals):
         for j, exercise in enumerate(subject[0]):
             max_value_no_exo = np.max(exercise)
@@ -175,6 +196,7 @@ def make_eval_over_exercises(signals):
             max_values_with_exo[j].append(max_value_with_exo)
             mean_values_with_exo[j].append(mean_value_with_exo)
 
+    # Calculate differences for statistical analysis
     for ex in range(NUMBER_OF_EXERCISES):
         for subj in range(NUMBER_OF_SUBJECTS):
             diffs_max_values[ex].append(
@@ -184,6 +206,7 @@ def make_eval_over_exercises(signals):
                 mean_values_no_exo[ex][subj] - mean_values_with_exo[ex][subj]
             )
 
+    # Write reports and statistics for each exercise
     for i in range(NUMBER_OF_EXERCISES):
         reports[i][f"exercise {i + 1}"]["all subjects"] = {
             "ohne exo": {
@@ -213,26 +236,29 @@ def make_eval_over_exercises(signals):
     return
 
 
-# calculates mean, max and statistical analysis concatenated over all exercises. Writes report to json
 def make_eval_concat(signals):
+    """
+    Concatenates all exercises for each subject, then calculates the mean and max values for each round and exercise,
+    computes differences, and performs statistical analysis.
+    Writes a .json report for each exercise.
+    """
     max_values_no_exo = []
     mean_values_no_exo = []
-    power_spikes_values_no_exo = []
 
     max_values_with_exo = []
     mean_values_with_exo = []
-    power_spikes_values_with_exo = []
 
     diffs_max_values = []
     diffs_mean_values = []
-    diffs_power_spikes_values = []
 
     report_concat = {"concatenated evaluation": {}}
+
     # evaluate over both rounds concatenated
     for i, subject in enumerate(signals):
         round_no_exo = []
         round_with_exo = []
 
+        # Concatenate all exercises for each round
         for exercise in subject[0]:
             round_no_exo = np.concatenate((round_no_exo, exercise))
         for exercise in subject[1]:
@@ -240,46 +266,38 @@ def make_eval_concat(signals):
 
         round_no_exo_max = np.max(round_no_exo)
         round_no_exo_mean = np.mean(round_no_exo)
-        # round_no_exo_power_spikes = get_power_spikes(round_no_exo)
 
         round_with_exo_max = np.max(round_with_exo)
         round_with_exo_mean = np.mean(round_with_exo)
-        # round_with_exo_power_spikes = get_power_spikes(round_with_exo)
 
         diffs_max_values.append(round_no_exo_max - round_with_exo_max)
         diffs_mean_values.append(round_no_exo_mean - round_with_exo_mean)
-        # diffs_power_spikes_values.append(round_no_exo_power_spikes - round_with_exo_power_spikes)
 
         report_concat["concatenated evaluation"][f"subject {i}"] = {
             "ohne exo": {
                 "max": round_no_exo_max,
                 "mean": round_no_exo_mean,
-                # "power spikes": round_no_exo_power_spikes,
             },
             "mit exo": {
                 "max": round_with_exo_max,
                 "mean": round_with_exo_mean,
-                # "power spikes": round_with_exo_power_spikes,
             },
         }
         max_values_no_exo.append(round_no_exo_max)
         mean_values_no_exo.append(round_no_exo_mean)
-        # power_spikes_values_no_exo.append(round_no_exo_power_spikes)
 
         max_values_with_exo.append(round_with_exo_max)
         mean_values_with_exo.append(round_with_exo_mean)
-        # power_spikes_values_with_exo.append(round_with_exo_power_spikes)
 
+    # Add group statistics and statistical analysis
     report_concat["concatenated evaluation"]["all subjects"] = {
         "ohne exo": {
             "mean of max": np.mean(max_values_no_exo),
             "mean of mean": np.mean(mean_values_no_exo),
-            # "mean of power spikes": np.mean(power_spikes_values_no_exo),
         },
         "mit exo": {
             "mean of max": np.mean(max_values_with_exo),
             "mean of mean": np.mean(mean_values_with_exo),
-            # "mean of power spikes": np.mean(power_spikes_values_with_exo),
         },
     }
     report_concat["concatenated evaluation"]["statistics"] = {}
@@ -294,33 +312,14 @@ def make_eval_concat(signals):
             diffs_mean_values, mean_values_no_exo, mean_values_with_exo
         )
     )
-    """
-    report_concat["concatenated evaluation"]["statistics"]["power spikes"] = (
-        get_statistical_analysis(
-            diffs_power_spikes_values, power_spikes_values_no_exo, power_spikes_values_with_exo
-        )
-    )"""
 
     os.makedirs("Data/BKMP/evaluations", exist_ok=True)
     with open("Data/BKMP/evaluations/evaluations_concat.json", "w") as file:
         json.dump(report_concat, file, indent=4)
 
 
-slices = get_slices_all_subjects()
-make_eval_concat(slices)
-make_eval_over_exercises(slices)
-
-"""
-name, data, time = extract_column("./Data/BKMP/Subject5/subject5_ohne_exo.acp", 11)
-print(name)
-plt.plot(time, data, label=name)
-plt.xlabel("Time (s)")
-plt.ylabel("Force (N)")
-plt.title("Subject5 ohne exo")
-
-plt.grid(True)
-plt.legend()
-
-plt.show()
-# plt.(figsize=(8, 4))
-"""
+# Main execution: load all slices and perform evaluations
+if __name__ == "__main__":
+    slices = get_slices_all_subjects()
+    make_eval_concat(slices)
+    make_eval_over_exercises(slices)

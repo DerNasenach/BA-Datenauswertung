@@ -10,11 +10,8 @@ from scipy.stats import shapiro
 from scipy.stats import ttest_rel
 from scipy.stats import wilcoxon
 from scipy.stats import norm
-from scipy.ndimage import generic_filter
 
 from sklearn.ensemble import IsolationForest
-from sklearn.model_selection import train_test_split
-from sklearn.datasets import load_iris
 
 SAMPLING_RATE = 2148.1481  # Hz
 NUMBER_OF_SUBJECTS = 8
@@ -34,21 +31,13 @@ MULTI_PROCESSING = True
 PLOT_ANOMALY_DETECTION = False
 
 
-def get_median_frequency(signal):
-    # Compute power Spectral Density using welch
-    freqs, psd = welch(signal, fs=SAMPLING_RATE, nperseg=1024)
-
-    cumulative_power = np.cumsum(psd)
-    total_power = cumulative_power[-1]
-    median_freq = freqs[np.where(cumulative_power >= total_power / 2)[0][0]]
-
-    return median_freq
-
-
-# returns a list of int with indices of detected anomalies in the input list
 def detect_anomalies_iforest_windowed_threshold(
     time_series, window_size=5000, stride=500, std_factor=3, plot=PLOT_ANOMALY_DETECTION
 ):
+    """
+    Detects anomalies in a time series using a windowed isolation forest algorithm
+    returns indices of detected anomalies.
+    """
     if VERBOSE:
         print("Starting anomaly detection")
     ts = np.array(time_series).reshape(-1, 1)
@@ -61,7 +50,6 @@ def detect_anomalies_iforest_windowed_threshold(
     # Slide windows
     for start in range(0, n - window_size + 1, stride):
         end = start + window_size
-        # print(f"detecting for window {start} - {end}")
         window_data = ts[start:end]
 
         model.fit(window_data)
@@ -74,7 +62,7 @@ def detect_anomalies_iforest_windowed_threshold(
     averaged_scores = np.full(n, np.nan)
     averaged_scores[valid] = score_sum[valid] / score_count[valid]
 
-    # Compute global threshold from non-NaN averaged scores
+    # Compute global threshold from averaged scores
     score_mean = np.nanmean(averaged_scores)
     score_std = np.nanstd(averaged_scores)
     threshold = score_mean - std_factor * score_std
@@ -85,7 +73,7 @@ def detect_anomalies_iforest_windowed_threshold(
     if VERBOSE:
         print(f"End of anomaly detection. {len(anomaly_indices)} anomalies found")
 
-    # Plot
+    # Plot result
     if plot:
         plt.figure(figsize=(12, 5))
         plt.plot(ts, label="Time Series")
@@ -102,6 +90,10 @@ def detect_anomalies_iforest_windowed_threshold(
 def detect_anomalies_iforest_contamination(
     time_series, contamination, plot=PLOT_ANOMALY_DETECTION
 ):
+    """
+    Detects anomalies in a time series using an isolation forest algorithm with an expected contamination ratio.
+    Returns indices of detected anomalies.
+    """
     if VERBOSE:
         print("Starting anomaly detection")
 
@@ -131,8 +123,9 @@ def detect_anomalies_iforest_contamination(
     return anomaly_indices
 
 
-# removes anomalies from time series, returns altered time series
 def remove_anomalies(time_series: np.array, threshold=0.8):
+    # removes anomalies from time series, returns cleaned time series
+
     """
     expected_anomalies = np.sum(np.abs(time_series) > threshold)
     if expected_anomalies == 0:
@@ -160,39 +153,63 @@ def remove_anomalies(time_series: np.array, threshold=0.8):
     return time_series[mask]
 
 
-# returns the Root-Mean-Square of a time series
-def rms(time_series):
-    return np.sqrt(np.mean(time_series**2))
+def get_median_frequency(signal):
+    # Compute power Spectral Density using welch then compute median frequency from that
+    freqs, psd = welch(signal, fs=SAMPLING_RATE, nperseg=1024)
+
+    cumulative_power = np.cumsum(psd)
+    total_power = cumulative_power[-1]
+    median_freq = freqs[np.where(cumulative_power >= total_power / 2)[0][0]]
+
+    return median_freq
 
 
-# returns a windowed Root-Mean-Square of a time series
 def wrms(time_series, window_size=50):
-    return generic_filter(time_series, rms, size=window_size)
+    """
+    returns a windowed Root-Mean-Square of a time series
+    """
+    n = len(time_series)
+    result = np.zeros(n)
+
+    for i in range(n):
+        # Define the window boundaries
+        start = max(0, i - window_size // 2)
+        end = min(n, i + window_size // 2 + 1)
+
+        # Extract the windowed time series
+        window = time_series[start:end]
+
+        # Calculate the RMS for the current window
+        result[i] = np.sqrt(np.mean(window**2))
+
+    return result
 
 
-# reads and formats the sliced data of specified subject, computes metrics
 def get_metrics_subject(subject_number: int):
+    """
+    Loads and processes signal for single subject
+    returns nested list of metrics
+    """
     if VERBOSE:
         print(f"evaluating Subject {subject_number}")
-    subject_number_str = str(subject_number)
-    folder_path = "Data/EMG/Subject" + subject_number_str + "/sliced/"
-    file_prefix_path_no_exo = folder_path + "ohne_exo_exercise"
-    file_prefix_path_with_exo = folder_path + "mit_exo_exercise"
+    folder_path = f"Data/EMG/Subject{subject_number}/sliced/"
+    file_prefix_path_no_exo = f"{folder_path}ohne_exo_exercise"
+    file_prefix_path_with_exo = f"{folder_path}mit_exo_exercise"
 
-    evaluation_subject = []
+    metrics_subject = []
 
+    # loop over exercises, read sliced files,
     for i in range(1, 7):
         if VERBOSE:
-            print(f"reading exercise {i}")
+            print(f"reading exercise {i} of subject {subject_number}")
         with open(
-            file_prefix_path_no_exo + str(i) + ".csv",
+            f"{file_prefix_path_no_exo}{i}.csv",
             mode="r",
             newline="",
             encoding="utf-8",
         ) as infile_no_exo:
             csv_reader_no_exo = csv.reader(infile_no_exo, delimiter=",")
             list_no_exo = list(csv_reader_no_exo)
-            header = list_no_exo[0]
             matrix_no_exo = np.transpose(np.array(list_no_exo[1:], dtype=float))
 
         with open(
@@ -208,14 +225,14 @@ def get_metrics_subject(subject_number: int):
 
         evaluation_exercise = []
 
+        # loop over muscles, remove anomalies, apply windowed rms, calculate metrics
         for j in range(0, 8):
             if VERBOSE:
                 print(f"Subject {subject_number}, reading muscle {MUSCLE_NAMES[j]}")
-            muscle_name = str(header[j])
+
             values_no_exo_cleaned = remove_anomalies(matrix_no_exo[j])
             values_with_exo_cleaned = remove_anomalies(matrix_with_exo[j])
 
-            # TODO: evaluate wether abs or windowed rms should be used
             values_no_exo_wrms = wrms(values_no_exo_cleaned)
             values_with_exo_wrms = wrms(values_with_exo_cleaned)
 
@@ -236,32 +253,32 @@ def get_metrics_subject(subject_number: int):
                 )
             )
 
-        evaluation_subject.append(evaluation_exercise)
+        metrics_subject.append(evaluation_exercise)
 
-    return evaluation_subject
+    return metrics_subject
 
 
-# takes two lists of max, mean and median freq values
 def get_analysis(muscle_number: int, values, differences):
+    """
+    perform statistical analysis and return report as dictionary
+    """
     VALUE_STRINGS = {0: "max", 1: "mean", 2: "median frequency"}
     report = {MUSCLE_NAMES[muscle_number]: {}}
 
     for i in range(len(differences)):
         # Use shapiro-wilk test to test for normality
-        stat, p = shapiro(differences[i])
+        _, p = shapiro(differences[i])
 
         mean_diff = np.mean(differences[i])
         std_diff = np.std(differences[i], ddof=1)
 
         # differences are normally distributed, use paired t-test
         if p > 0.05:
-            t_stat, p = ttest_rel(
-                [a for (a, b) in values[i]], [b for (a, b) in values[i]]
-            )
+            _, p = ttest_rel([a for (a, b) in values[i]], [b for (a, b) in values[i]])
 
             # Compute Cohen's d-value for effect size
             d = mean_diff / std_diff
-            effect_size = "Cohen d-value : " + str(d)
+            effect_size = f"Cohen d-value : {d}"
             if d < 0.2:
                 effect_size += ". no effect"
             elif d < 0.5:
@@ -273,13 +290,13 @@ def get_analysis(muscle_number: int, values, differences):
 
         # differences are not normally distributed, use wilcoxon signed-rank test
         else:
-            stat, p = wilcoxon([a for (a, b) in values[i]], [b for (a, b) in values[i]])
+            _, p = wilcoxon([a for (a, b) in values[i]], [b for (a, b) in values[i]])
 
             # Compute effect size
             z = norm.ppf(1 - p / 2)
             r = z / np.sqrt(len(differences[i]))
 
-            effect_size = "Wilcoxon r-value : " + str(r)
+            effect_size = f"Wilcoxon r-value : {r}"
             if r < 0.1:
                 effect_size += ". no effect"
             elif r < 0.3:
@@ -304,6 +321,9 @@ def get_analysis(muscle_number: int, values, differences):
 
 
 def make_statistics_analysis_from_metrics(evals):
+    """
+    generates statistics and writes reports for all muscles and exercises
+    """
     if VERBOSE:
         print("generating statistical analysis")
     muscles_values = []
@@ -323,9 +343,10 @@ def make_statistics_analysis_from_metrics(evals):
         }
         for n in range(1, NUMBER_OF_EXERCISES + 1)
     ]
-    # Get max, mean and median freq for each muscle over all exercises
     if VERBOSE:
         print("  evaluating over each exercise over each muscle")
+
+    # Get max, mean and median freq for each muscle
     for muscle_number in range(0, 8):
         if VERBOSE:
             print(f"    evaluating muscle {MUSCLE_NAMES[muscle_number]}")
@@ -336,6 +357,9 @@ def make_statistics_analysis_from_metrics(evals):
         muscle_max_diffs = []
         muscle_mean_diffs = []
         muscle_median_freq_diffs = []
+
+        # evaluation over separate subjects,
+        # loops over subjects and writes metrics into report dictinoary
         for subject_number in range(len(evals)):
             for exercise_number in range(len(evals[subject_number])):
                 muscle_max_values.append(
@@ -422,6 +446,8 @@ def make_statistics_analysis_from_metrics(evals):
         )
         if VERBOSE:
             print("    evaluating over all subjects")
+
+        # evaluation over aggregated subjects
         for exercise_dict in reports:
             for _, d in exercise_dict.items():
                 for muscle_name, muscle_values in d.items():
@@ -485,6 +511,7 @@ def make_statistics_analysis_from_metrics(evals):
                         },
                     }
 
+    # write dictionaries to files
     for i, exercise_dict in enumerate(reports):
         for exercise, d in exercise_dict.items():
             os.makedirs(f"Data/EMG/evaluations/{exercise}", exist_ok=True)
@@ -496,7 +523,7 @@ def make_statistics_analysis_from_metrics(evals):
                 ) as file:
                     json.dump(data, file, indent=4)
 
-    # Aggregate evaluation
+    # Evaluation over aggregated exercises
     if VERBOSE:
         print("evaluating over aggregated exercises")
     aggregate_report = {MUSCLE_NAMES[i]: {} for i in range(8)}
@@ -504,6 +531,8 @@ def make_statistics_analysis_from_metrics(evals):
     for muscle_number in range(8):
         if VERBOSE:
             print(f"    evaluating muscle {MUSCLE_NAMES[muscle_number]}")
+
+        # evaluation over separate subjects
         for subject_number in range(len(evals)):
             all_raw_no_exo = []
             all_raw_with_exo = []
@@ -607,6 +636,9 @@ def make_statistics_analysis_from_metrics(evals):
 
 
 if __name__ == "__main__":
+    """
+    main execution: process all subjects and generate statistics
+    """
     if MULTI_PROCESSING:
         with mp.Pool(processes=mp.cpu_count()) as pool:
             subject_evals = pool.map(get_metrics_subject, range(1, 9))

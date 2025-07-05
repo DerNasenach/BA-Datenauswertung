@@ -1,8 +1,13 @@
 import pandas as pd
-import re
+
+"""
+helper file to unify format of two CAPTIV csv datafiles and aggregate them, 
+allowing for easier access during evaluation
+used for the aggregation of subject 5 without exo data, as one exercise was recorded separately,
+resulting in two raw files with differing formats for the round without exo.
+"""
 
 
-# helper file to unify format of two CAPTIV csv datafiles and aggregate them, allowing for easier access during evaluation
 def merge_captiv_datasets(
     base_csv_path,
     hoeherlagern_csv_path,
@@ -57,8 +62,9 @@ def merge_captiv_datasets(
         merged_df.to_csv(f, index=False, header=False, lineterminator="\n")
 
 
-merge_captiv_datasets(
-    "Data/CAPTIV/Subject5/subject5_ohne_exo_raw.csv",
-    "Data/CAPTIV/Subject5/subject5_ohne_exo_hoeherlagern.csv",
-    "Data/CAPTIV/Subject5/subject5_ohne_exo.csv",
-)
+if __name__ == "__main__":
+    merge_captiv_datasets(
+        "Data/CAPTIV/Subject5/subject5_ohne_exo_raw.csv",
+        "Data/CAPTIV/Subject5/subject5_ohne_exo_hoeherlagern.csv",
+        "Data/CAPTIV/Subject5/subject5_ohne_exo.csv",
+    )

@@ -1,3 +1,7 @@
+# replaces delimiters in EMG .csv files
+# formating for easier read-in during the evaluation.
+
+
 def replace_delimiters(input_path):
     with open(input_path, "r") as file:
         content = file.read()
@@ -10,9 +14,5 @@ def replace_delimiters(input_path):
 
 
 for i in range(1, 9):
-    replace_delimiters(
-        "Data/EMG/Subject" + str(i) + "/subject" + str(i) + "_mit_exo.csv"
-    )
-    replace_delimiters(
-        "Data/EMG/Subject" + str(i) + "/subject" + str(i) + "_ohne_exo.csv"
-    )
+    replace_delimiters(f"Data/EMG/Subject{i}/subject{i}_mit_exo.csv")
+    replace_delimiters(f"Data/EMG/Subject{i}/subject{i}_ohne_exo.csv")
