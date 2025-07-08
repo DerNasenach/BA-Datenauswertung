@@ -1,0 +1,8 @@
+done - visualisierung auf absolute werte umstellen, relative werte anhängen
+done - CAPTIV: ROM anfügen
+done - evtl andere visualisierungsform (Spinnennetzdiagramm)
+- alternative anomaly detection algorithmen testen
+- Gliederung schreiben
+done - code kommentieren
+- Ausarbeitung auf deutsch
+- median frequenz starker unterschied zwischen einzelnen übungen und aggregat -> berechnung prüfen

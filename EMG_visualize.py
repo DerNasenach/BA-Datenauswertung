@@ -66,7 +66,7 @@ def visualize_absolute_emg_values(ax, json_path, title):
     return bars1, bars2
 
 
-def plot_emg_radar(muscle_files, base_path, out_path_prefix):
+def plot_emg_radar(muscles, base_path, out_path_prefix):
     """
     plots radar diagrams for all muscles and metrics max, mean and median frequency
     """
@@ -75,7 +75,8 @@ def plot_emg_radar(muscle_files, base_path, out_path_prefix):
         ("mean", "Mean (mV)"),
         ("median frequency", "Median Freqency (Hz)"),
     ]
-    muscle_labels = [name for _, name in muscle_files]
+    muscle_labels = [abbr for _, _, abbr in muscles]  # Use abbreviations
+    muscle_full_legend = [f"{abbr} - {name}" for _, name, abbr in muscles]
 
     # Prepare data for each exercise (0=aggregate, 1-6=exercises)
     for ex_idx in range(7):
@@ -91,7 +92,7 @@ def plot_emg_radar(muscle_files, base_path, out_path_prefix):
         # Collect values for all muscles
         ohne_vals = {metric: [] for metric, _ in metrics}
         mit_vals = {metric: [] for metric, _ in metrics}
-        for muscle_file, _ in muscle_files:
+        for muscle_file, _, _ in muscles:
             json_path = os.path.join(ex_file, muscle_file)
             with open(json_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
@@ -123,7 +124,21 @@ def plot_emg_radar(muscle_files, base_path, out_path_prefix):
             ax.fill(angles, values_mit, color="#C0504D", alpha=0.15)
 
             ax.set_xticks(angles[:-1])
-            ax.set_xticklabels(muscle_labels, fontsize=10)
+            ax.set_xticklabels([])
+
+            # place lables a little outside the diagram, prevent overlapping
+            label_radius = max(values_ohne + values_mit) * 1.22
+            for angle, label in zip(angles[:-1], muscle_labels):
+                ax.text(
+                    angle,
+                    label_radius,
+                    label,
+                    size=11,
+                    horizontalalignment="center",
+                    verticalalignment="center",
+                    fontweight="bold",
+                )
+
             ax.set_title(metric_label, size=14, y=1.1)
             ax.grid(True)
 
@@ -151,6 +166,17 @@ def plot_emg_radar(muscle_files, base_path, out_path_prefix):
 
             ax.set_ylabel("", labelpad=20)
 
+        # Add legend for abbreviations
+        fig.text(
+            1.02,
+            0.5,
+            "\n".join(muscle_full_legend),
+            va="center",
+            ha="left",
+            fontsize=12,
+            transform=fig.transFigure,
+        )
+
         axs[0].legend(loc="upper left", bbox_to_anchor=(1.1, 1.1), fontsize=12)
         fig.suptitle(f"EMG Radar Diagram: {ex_name}", fontsize=18, y=1.08)
         plt.tight_layout(rect=[0, 0, 1, 0.95])
@@ -164,21 +190,21 @@ if __name__ == "__main__":
     """
 
     muscles = [
-        ("Biceps_femoris_left.json", "Biceps femoris left"),
-        ("Biceps_femoris_right.json", "Biceps femoris right"),
-        ("Quadriceps_left.json", "Quadriceps left"),
-        ("Quadriceps_right.json", "Quadriceps right"),
-        ("Gluteus_maximus_left.json", "Gluteus maximus left"),
-        ("Gluteus_maximus_right.json", "Gluteus maximus right"),
-        ("Erector_spinae_left.json", "Erector spinae left"),
-        ("Erector_spinae_right.json", "Erector spinae right"),
+        ("Biceps_femoris_left.json", "Biceps femoris left", "b.f.l."),
+        ("Biceps_femoris_right.json", "Biceps femoris right", "b.f.r."),
+        ("Quadriceps_left.json", "Quadriceps left", "q.l."),
+        ("Quadriceps_right.json", "Quadriceps right", "q.r."),
+        ("Gluteus_maximus_left.json", "Gluteus maximus left", "g.m.l."),
+        ("Gluteus_maximus_right.json", "Gluteus maximus right", "g.m.r."),
+        ("Erector_spinae_left.json", "Erector spinae left", "e.s.l."),
+        ("Erector_spinae_right.json", "Erector spinae right", "e.s.r."),
     ]
 
     base_path = "Data/EMG/evaluations"
 
     plot_emg_radar(muscles, base_path, os.path.join(base_path, "EMG"))
 
-    for muscle_file, muscle_name in muscles:
+    for muscle_file, muscle_name, _ in muscles:
         params = [
             [os.path.join(base_path, "aggregate", muscle_file), "All Exercises"],
         ]

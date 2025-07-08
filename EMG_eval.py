@@ -28,14 +28,21 @@ MUSCLE_NAMES = {
 }
 VERBOSE = True
 MULTI_PROCESSING = True
+
+DO_ANOMALY_DETECTION = True
 PLOT_ANOMALY_DETECTION = False
+ANOMALY_DETECTION_METHODS = {
+    0: "isolation forest, estimated contamination",
+    1: "isolation forest, windowed, threshold contamination",
+}
+ANOMALY_DETECTION_METHOD = 0
 
 
 def detect_anomalies_iforest_windowed_threshold(
     time_series, window_size=5000, stride=500, std_factor=3, plot=PLOT_ANOMALY_DETECTION
 ):
     """
-    Detects anomalies in a time series using a windowed isolation forest algorithm
+    Detects anomalies in a time series using a windowed isolation forest algorithm with a threshold for contamination
     returns indices of detected anomalies.
     """
     if VERBOSE:
@@ -124,29 +131,34 @@ def detect_anomalies_iforest_contamination(
 
 
 def remove_anomalies(time_series: np.array, threshold=0.8):
-    # removes anomalies from time series, returns cleaned time series
-
     """
-    expected_anomalies = np.sum(np.abs(time_series) > threshold)
-    if expected_anomalies == 0:
-        return time_series
-
-    print(f"expected anomalies: {expected_anomalies}")
-    expected_correct_values = np.sum(np.abs(time_series) < threshold)
-    if expected_correct_values == 0:
-        raise ValueError("Invalid file, no readable values in time series")
-
-    contamination_ratio = expected_anomalies / expected_correct_values
-    if contamination_ratio >= 0.5:
-        raise ValueError("Invalid file, too many anomalies in time series")
-
-    # anomalies = detect_anomalies_iforest_contamination(time_series, contamination_ratio)
-
-    # no specified contamination
+    removes anomalies from time series
+    returns cleaned time series
     """
-    if np.max(np.abs(time_series)) < threshold:
-        return time_series
-    anomalies = detect_anomalies_iforest_windowed_threshold(time_series)
+
+    if ANOMALY_DETECTION_METHOD == 0:
+        if np.max(np.abs(time_series)) < threshold:
+            return time_series
+        anomalies = detect_anomalies_iforest_windowed_threshold(time_series)
+
+    if ANOMALY_DETECTION_METHOD == 1:
+        expected_anomalies = np.sum(np.abs(time_series) > threshold)
+        if expected_anomalies == 0:
+            return time_series
+
+        print(f"expected anomalies: {expected_anomalies}")
+        expected_correct_values = np.sum(np.abs(time_series) < threshold)
+        if expected_correct_values == 0:
+            raise ValueError("Invalid file, no readable values in time series")
+
+        contamination_ratio = expected_anomalies / expected_correct_values
+        if contamination_ratio >= 0.5:
+            raise ValueError("Invalid file, too many anomalies in time series")
+
+        anomalies = detect_anomalies_iforest_contamination(
+            time_series, contamination_ratio
+        )
+
     mask = np.ones(len(time_series), dtype=bool)
     mask[anomalies] = False
 
@@ -230,8 +242,12 @@ def get_metrics_subject(subject_number: int):
             if VERBOSE:
                 print(f"Subject {subject_number}, reading muscle {MUSCLE_NAMES[j]}")
 
-            values_no_exo_cleaned = remove_anomalies(matrix_no_exo[j])
-            values_with_exo_cleaned = remove_anomalies(matrix_with_exo[j])
+            if DO_ANOMALY_DETECTION:
+                values_no_exo_cleaned = remove_anomalies(matrix_no_exo[j])
+                values_with_exo_cleaned = remove_anomalies(matrix_with_exo[j])
+            else:
+                values_no_exo_cleaned = matrix_no_exo[j]
+                values_with_exo_cleaned = matrix_with_exo[j]
 
             values_no_exo_wrms = wrms(values_no_exo_cleaned)
             values_with_exo_wrms = wrms(values_with_exo_cleaned)
@@ -250,6 +266,7 @@ def get_metrics_subject(subject_number: int):
                     (no_exo_mean, with_exo_mean),
                     (no_exo_median_freq, with_exo_median_freq),
                     (values_no_exo_wrms, values_with_exo_wrms),
+                    (values_no_exo_cleaned, values_with_exo_cleaned),
                 )
             )
 
@@ -320,9 +337,9 @@ def get_analysis(muscle_number: int, values, differences):
     return report
 
 
-def make_statistics_analysis_from_metrics(evals):
+def make_reports_from_metrics(evals):
     """
-    generates statistics and writes reports for all muscles and exercises
+    generates reports for all muscles and exercises
     """
     if VERBOSE:
         print("generating statistical analysis")
@@ -511,7 +528,7 @@ def make_statistics_analysis_from_metrics(evals):
                         },
                     }
 
-    # write dictionaries to files
+    # write reports to files
     for i, exercise_dict in enumerate(reports):
         for exercise, d in exercise_dict.items():
             os.makedirs(f"Data/EMG/evaluations/{exercise}", exist_ok=True)
@@ -532,95 +549,116 @@ def make_statistics_analysis_from_metrics(evals):
         if VERBOSE:
             print(f"    evaluating muscle {MUSCLE_NAMES[muscle_number]}")
 
+        mean_med_freqs_no_exo = []
+        mean_med_freqs_with_exo = []
+
         # evaluation over separate subjects
         for subject_number in range(len(evals)):
-            all_raw_no_exo = []
-            all_raw_with_exo = []
+            all_exercises_rms_no_exo = []
+            all_exercises_rms_with_exo = []
+            all_exercises_med_freqs_no_exo = []
+            all_exercises_med_freqs_with_exo = []
 
+            # aggregate raw and rms data (cuts out jumps in between exercises)
             for exercise_number in range(len(evals[subject_number])):
-                all_raw_no_exo.extend(
+                all_exercises_rms_no_exo.extend(
                     evals[subject_number][exercise_number][muscle_number][3][0]
                 )
-                all_raw_with_exo.extend(
+                all_exercises_rms_with_exo.extend(
                     evals[subject_number][exercise_number][muscle_number][3][1]
                 )
+                all_exercises_med_freqs_no_exo.append(
+                    evals[subject_number][exercise_number][muscle_number][2][0]
+                )
+                all_exercises_med_freqs_with_exo.append(
+                    evals[subject_number][exercise_number][muscle_number][2][1]
+                )
 
-            all_raw_no_exo = np.array(all_raw_no_exo)
-            all_raw_with_exo = np.array(all_raw_with_exo)
+            all_exercises_rms_no_exo = np.array(all_exercises_rms_no_exo)
+            all_exercises_rms_with_exo = np.array(all_exercises_rms_with_exo)
+
+            mean_med_freq_no_exo = np.mean(all_exercises_med_freqs_no_exo)
+            mean_med_freq_with_exo = np.mean(all_exercises_med_freqs_with_exo)
+            mean_med_freqs_no_exo.append(mean_med_freq_no_exo)
+            mean_med_freqs_with_exo.append(mean_med_freq_with_exo)
 
             aggregate_report[MUSCLE_NAMES[muscle_number]][
                 f"subject {subject_number + 1}"
             ] = {
                 "ohne exo": {
-                    "max": np.max(all_raw_no_exo),
-                    "mean": np.mean(all_raw_no_exo),
-                    "median frequency": np.median(all_raw_no_exo),
+                    "max": np.max(all_exercises_rms_no_exo),
+                    "mean": np.mean(all_exercises_rms_no_exo),
+                    "median frequency": mean_med_freq_no_exo,
                 },
                 "mit exo": {
-                    "max": np.max(all_raw_with_exo),
-                    "mean": np.mean(all_raw_with_exo),
-                    "median frequency": np.median(all_raw_with_exo),
+                    "max": np.max(all_exercises_rms_with_exo),
+                    "mean": np.mean(all_exercises_rms_with_exo),
+                    "median frequency": mean_med_freq_with_exo,
                 },
                 "difference": {
                     "reduction max in %": (
-                        1 - np.max(all_raw_with_exo) / np.max(all_raw_no_exo)
+                        1
+                        - np.max(all_exercises_rms_with_exo)
+                        / np.max(all_exercises_rms_no_exo)
                     )
                     * 100,
                     "reduction mean in %": (
-                        1 - np.mean(all_raw_with_exo) / np.mean(all_raw_no_exo)
+                        1
+                        - np.mean(all_exercises_rms_with_exo)
+                        / np.mean(all_exercises_rms_no_exo)
                     )
                     * 100,
                     "reduction median frequency in %": (
-                        1 - np.median(all_raw_with_exo) / np.median(all_raw_no_exo)
+                        1 - mean_med_freq_with_exo / mean_med_freq_no_exo
                     )
                     * 100,
                 },
             }
 
         # Aggregate across all subjects
-        all_subjects_raw_no_exo = []
-        all_subjects_raw_with_exo = []
+        all_subjects_rms_no_exo = []
+        all_subjects_rms_with_exo = []
 
+        # aggregate raw data (cuts out jumps in between exercises)
         for subject_number in range(len(evals)):
             for exercise_number in range(len(evals[subject_number])):
-                all_subjects_raw_no_exo.extend(
+                all_subjects_rms_no_exo.extend(
                     evals[subject_number][exercise_number][muscle_number][3][0]
                 )
-                all_subjects_raw_with_exo.extend(
+                all_subjects_rms_with_exo.extend(
                     evals[subject_number][exercise_number][muscle_number][3][1]
                 )
 
-        all_subjects_raw_no_exo = np.array(all_subjects_raw_no_exo)
-        all_subjects_raw_with_exo = np.array(all_subjects_raw_with_exo)
+        all_subjects_rms_no_exo = np.array(all_subjects_rms_no_exo)
+        all_subjects_rms_with_exo = np.array(all_subjects_rms_with_exo)
 
         aggregate_report[MUSCLE_NAMES[muscle_number]]["all subjects"] = {
             "ohne exo": {
-                "max": float(np.max(all_subjects_raw_no_exo)),
-                "mean": float(np.mean(all_subjects_raw_no_exo)),
-                "median frequency": float(np.median(all_subjects_raw_no_exo)),
+                "max": np.max(all_subjects_rms_no_exo),
+                "mean": np.mean(all_subjects_rms_no_exo),
+                "median frequency": np.mean(mean_med_freqs_no_exo),
             },
             "mit exo": {
-                "max": float(np.max(all_subjects_raw_with_exo)),
-                "mean": float(np.mean(all_subjects_raw_with_exo)),
-                "median frequency": float(np.median(all_subjects_raw_with_exo)),
+                "max": np.max(all_subjects_rms_with_exo),
+                "mean": np.mean(all_subjects_rms_with_exo),
+                "median frequency": np.mean(mean_med_freqs_with_exo),
             },
             "difference": {
                 "reduction max in %": (
                     1
-                    - np.max(all_subjects_raw_with_exo)
-                    / np.max(all_subjects_raw_no_exo)
+                    - np.max(all_subjects_rms_with_exo)
+                    / np.max(all_subjects_rms_no_exo)
                 )
                 * 100,
                 "reduction mean in %": (
                     1
-                    - np.mean(all_subjects_raw_with_exo)
-                    / np.mean(all_subjects_raw_no_exo)
+                    - np.mean(all_subjects_rms_with_exo)
+                    / np.mean(all_subjects_rms_no_exo)
                 )
                 * 100,
                 "reduction median frequency in %": (
                     1
-                    - np.median(all_subjects_raw_with_exo)
-                    / np.median(all_subjects_raw_no_exo)
+                    - np.mean(mean_med_freqs_with_exo) / np.mean(mean_med_freqs_no_exo)
                 )
                 * 100,
             },
@@ -646,4 +684,4 @@ if __name__ == "__main__":
         subject_evals = []
         for i in range(1, 9):
             subject_evals.append(get_metrics_subject(i))
-    make_statistics_analysis_from_metrics(subject_evals)
+    make_reports_from_metrics(subject_evals)
