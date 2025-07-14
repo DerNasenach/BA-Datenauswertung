@@ -1,8 +1,11 @@
 done - visualisierung auf absolute werte umstellen, relative werte anhängen
 done - CAPTIV: ROM anfügen
 done - evtl andere visualisierungsform (Spinnennetzdiagramm)
-- alternative anomaly detection algorithmen testen
-- Gliederung schreiben
 done - code kommentieren
+done - median frequenz starker unterschied zwischen einzelnen übungen und aggregat -> berechnung prüfen
+done - alternative anomaly detection algorithmen testen (svm_one_class_trainer https://dlib.net/ml_guide.svg)
+done - Bodenreaktionskraft -> Gewicht Exo abziehen - zweite grafik
+done - Gliederung schreiben
+- alternative berechnung der flexion/extension recherchieren
 - Ausarbeitung auf deutsch
-- median frequenz starker unterschied zwischen einzelnen übungen und aggregat -> berechnung prüfen
+- Leitfaden für Abschlussarbeiten -> Struktur schauen

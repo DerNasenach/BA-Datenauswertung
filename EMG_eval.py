@@ -12,6 +12,7 @@ from scipy.stats import wilcoxon
 from scipy.stats import norm
 
 from sklearn.ensemble import IsolationForest
+from sklearn.svm import OneClassSVM
 
 SAMPLING_RATE = 2148.1481  # Hz
 NUMBER_OF_SUBJECTS = 8
@@ -34,8 +35,9 @@ PLOT_ANOMALY_DETECTION = False
 ANOMALY_DETECTION_METHODS = {
     0: "isolation forest, estimated contamination",
     1: "isolation forest, windowed, threshold contamination",
+    2: "OneClassSVM",
 }
-ANOMALY_DETECTION_METHOD = 0
+ANOMALY_DETECTION_METHOD = 2
 
 
 def detect_anomalies_iforest_windowed_threshold(
@@ -104,11 +106,14 @@ def detect_anomalies_iforest_contamination(
     if VERBOSE:
         print("Starting anomaly detection")
 
+    # reshape data to fit isolation forest
     time_series = np.array(time_series).reshape(-1, 1)
 
+    # Initiate and train Model
     model = IsolationForest(contamination=contamination, random_state=42)
     model.fit(time_series)
 
+    # Predict anomalies
     labels = model.predict(time_series)
     anomaly_indices = np.where(labels == -1)[0]
     if VERBOSE:
@@ -130,7 +135,55 @@ def detect_anomalies_iforest_contamination(
     return anomaly_indices
 
 
-def remove_anomalies(time_series: np.array, threshold=0.8):
+def detect_anomalies_one_class_svm(
+    time_series, window_size=10, nu=0.1, plot=PLOT_ANOMALY_DETECTION
+):
+
+    if VERBOSE:
+        print("Starting anomaly detection")
+
+    # Create overlapping windows of the data
+    num_windows = time_series.shape[0] - window_size + 1
+    subsequences = np.zeros((num_windows, window_size))
+    for i in range(num_windows):
+        subsequences[i] = time_series[i : i + window_size]
+
+    # Initialize and train model
+    svm = OneClassSVM(kernel="rbf", nu=nu, gamma="auto")
+    svm.fit(subsequences)
+
+    # predict anomalies
+    labels = svm.predict(subsequences)
+    anomaly_indices = np.where(labels == -1)[0]
+
+    # print(np.count_nonzero(labels == -1))
+    """
+    anomaly_indices = np.zeros_like(time_series, dtype=int)
+    for i, prediction in enumerate(labels):
+        if prediction == -1:
+            anomaly_indices[i : i + window_size] = 1
+    """
+    # print(anomaly_indices)
+    if plot:
+        plt.figure(figsize=(12, 5))
+        plt.plot(time_series, label="Time Series")
+        plt.scatter(
+            anomaly_indices,
+            time_series[anomaly_indices],
+            color="red",
+            label="Anomalies",
+        )
+        plt.title("Anomaly Detection using SVM One Class")
+        plt.legend()
+        plt.show()
+
+    if VERBOSE:
+        print(f"End of anomaly detection. {len(anomaly_indices)} anomalies found")
+
+    return anomaly_indices
+
+
+def remove_anomalies(time_series: np.array, threshold=0.7):
     """
     removes anomalies from time series
     returns cleaned time series
@@ -141,23 +194,33 @@ def remove_anomalies(time_series: np.array, threshold=0.8):
             return time_series
         anomalies = detect_anomalies_iforest_windowed_threshold(time_series)
 
-    if ANOMALY_DETECTION_METHOD == 1:
+    if ANOMALY_DETECTION_METHOD == 1 or ANOMALY_DETECTION_METHOD == 2:
         expected_anomalies = np.sum(np.abs(time_series) > threshold)
         if expected_anomalies == 0:
             return time_series
 
-        print(f"expected anomalies: {expected_anomalies}")
-        expected_correct_values = np.sum(np.abs(time_series) < threshold)
+        expected_correct_values = np.sum(np.abs(time_series) <= threshold)
         if expected_correct_values == 0:
-            raise ValueError("Invalid file, no readable values in time series")
+            raise ValueError(
+                "Invalid file, all values in time series are greater than the defined anomaly threshold"
+            )
 
         contamination_ratio = expected_anomalies / expected_correct_values
         if contamination_ratio >= 0.5:
             raise ValueError("Invalid file, too many anomalies in time series")
 
-        anomalies = detect_anomalies_iforest_contamination(
-            time_series, contamination_ratio
-        )
+        if VERBOSE:
+            print(f"expected anomaly ratio: {contamination_ratio}")
+
+        if ANOMALY_DETECTION_METHOD == 1:
+            anomalies = detect_anomalies_iforest_contamination(
+                time_series, contamination_ratio
+            )
+
+        if ANOMALY_DETECTION_METHOD == 2:
+            anomalies = detect_anomalies_one_class_svm(
+                time_series, nu=contamination_ratio
+            )
 
     mask = np.ones(len(time_series), dtype=bool)
     mask[anomalies] = False
@@ -529,7 +592,7 @@ def make_reports_from_metrics(evals):
                     }
 
     # write reports to files
-    for i, exercise_dict in enumerate(reports):
+    for _, exercise_dict in enumerate(reports):
         for exercise, d in exercise_dict.items():
             os.makedirs(f"Data/EMG/evaluations/{exercise}", exist_ok=True)
             for muscle, data in d.items():

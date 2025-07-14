@@ -13,6 +13,8 @@ NUMBER_OF_EXERCISES = 6
 HEADER_ROW = 16
 DATA_START_ROW = 18
 
+EXO_WEIGHT_IN_N = 11.57
+
 
 def extract_column(file_path, n=Z_FILTERED_COLUMN, start_row=DATA_START_ROW):
     """
@@ -53,6 +55,11 @@ def get_slices_of_subject(subject_number):
         acp_path = file_prefix_path + round_name + ".acp"
 
         _, signal_raw, _ = extract_column(acp_path)
+
+        # subtracts the weight of the exo skeleton from the raw signal
+        if round_name == "mit_exo":
+            signal_raw = [s - EXO_WEIGHT_IN_N for s in signal_raw]
+
         signal_round_sliced = []
 
         for _, indices_exercise in indices_round.items():

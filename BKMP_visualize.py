@@ -18,8 +18,8 @@ def visualize_force_absolute_differences(ax, json_path, title):
 
     # Define which metrics to plot
     metrics = [
-        ("mean of mean", "Mean of Means"),
-        ("mean of max", "Mean of Max"),
+        ("mean of mean", "Mean"),
+        ("mean of max", "Max"),
     ]
 
     ohne_vals = []
