@@ -20,7 +20,7 @@ def visualize_angle_differences(ax, json_path, name_layer_1, value_type="mean"):
             ("mean_torsion", "Mean Torsion"),
             ("mean_flexion", "Mean Flexion"),
             ("mean_extension", "Mean Extension"),
-            ("mean_total_angle", "Mean Total Angle"),
+            # ("mean_total_angle", "Mean Total Angle"),
         ]
         flexion_key = "mean_flexion"
         extension_key = "mean_extension"
@@ -29,7 +29,7 @@ def visualize_angle_differences(ax, json_path, name_layer_1, value_type="mean"):
             ("max_torsion", "Max Torsion"),
             ("max_flexion", "Max Flexion"),
             ("max_extension", "Max Extension"),
-            ("max_total_angle", "Max Total Angle"),
+            # ("max_total_angle", "Max Total Angle"),
         ]
         flexion_key = "max_flexion"
         extension_key = "max_extension"

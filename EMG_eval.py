@@ -6,10 +6,6 @@ import matplotlib.pyplot as plt
 import multiprocessing as mp
 
 from scipy.signal import welch
-from scipy.stats import shapiro
-from scipy.stats import ttest_rel
-from scipy.stats import wilcoxon
-from scipy.stats import norm
 
 from sklearn.ensemble import IsolationForest
 from sklearn.svm import OneClassSVM
@@ -28,10 +24,10 @@ MUSCLE_NAMES = {
     7: "Erector spinae right",
 }
 VERBOSE = True
-MULTI_PROCESSING = True
+MULTI_PROCESSING = False
 
 DO_ANOMALY_DETECTION = True
-PLOT_ANOMALY_DETECTION = False
+PLOT_ANOMALY_DETECTION = True
 ANOMALY_DETECTION_METHODS = {
     0: "isolation forest, estimated contamination",
     1: "isolation forest, windowed, threshold contamination",
@@ -40,60 +36,27 @@ ANOMALY_DETECTION_METHODS = {
 ANOMALY_DETECTION_METHOD = 2
 
 
-def detect_anomalies_iforest_windowed_threshold(
-    time_series, window_size=5000, stride=500, std_factor=3, plot=PLOT_ANOMALY_DETECTION
-):
+def plot_anomaly_detection(time_series, anomaly_indices, title):
     """
-    Detects anomalies in a time series using a windowed isolation forest algorithm with a threshold for contamination
-    returns indices of detected anomalies.
+    plots the result of anomaly detection
     """
-    if VERBOSE:
-        print("Starting anomaly detection")
-    ts = np.array(time_series).reshape(-1, 1)
-    n = len(ts)
-    score_sum = np.zeros(n)
-    score_count = np.zeros(n)
+    # x-label in seconds instead of Index + Hz
+    time = np.arange(len(time_series)) / SAMPLING_RATE
 
-    model = IsolationForest(contamination="auto", random_state=42)
+    plt.figure(figsize=(12, 5))
+    plt.plot(time, time_series, label="Zeitreihe")
+    plt.scatter(
+        anomaly_indices / SAMPLING_RATE,
+        time_series[anomaly_indices],
+        color="red",
+        label="Anomalien",
+    )
 
-    # Slide windows
-    for start in range(0, n - window_size + 1, stride):
-        end = start + window_size
-        window_data = ts[start:end]
-
-        model.fit(window_data)
-        window_scores = model.decision_function(window_data)
-
-        score_sum[start:end] += window_scores
-        score_count[start:end] += 1
-
-    valid = score_count > 0
-    averaged_scores = np.full(n, np.nan)
-    averaged_scores[valid] = score_sum[valid] / score_count[valid]
-
-    # Compute global threshold from averaged scores
-    score_mean = np.nanmean(averaged_scores)
-    score_std = np.nanstd(averaged_scores)
-    threshold = score_mean - std_factor * score_std
-
-    # Label anomalies
-    anomaly_mask = averaged_scores < threshold
-    anomaly_indices = np.where(anomaly_mask)[0]
-    if VERBOSE:
-        print(f"End of anomaly detection. {len(anomaly_indices)} anomalies found")
-
-    # Plot result
-    if plot:
-        plt.figure(figsize=(12, 5))
-        plt.plot(ts, label="Time Series")
-        plt.scatter(
-            anomaly_indices, ts[anomaly_indices], color="red", label="Anomalies"
-        )
-        plt.title("Adaptive Isolation Forest (Overlapping Windows)")
-        plt.legend()
-        plt.show()
-
-    return anomaly_indices
+    plt.xlabel("Zeit (s)")
+    plt.ylabel("Muskelaktivität (mV)")
+    plt.title(title)
+    plt.legend()
+    plt.show()
 
 
 def detect_anomalies_iforest_contamination(
@@ -120,17 +83,65 @@ def detect_anomalies_iforest_contamination(
         print(f"End of anomaly detection. {len(anomaly_indices)} anomalies found")
 
     if plot:
-        plt.figure(figsize=(12, 5))
-        plt.plot(time_series, label="Time Series")
-        plt.scatter(
+        plot_anomaly_detection(time_series, anomaly_indices, "Isolation Forest")
+
+    return anomaly_indices
+
+
+def detect_anomalies_iforest_windowed_threshold(
+    time_series,
+    window_size=4000,
+    stride=500,
+    std_factor=3,
+    plot=PLOT_ANOMALY_DETECTION,
+):
+    """
+    Detects anomalies in a time series using a windowed isolation forest algorithm with a threshold for contamination
+    returns indices of detected anomalies.
+    """
+    if VERBOSE:
+        print("Starting anomaly detection")
+    ts = np.array(time_series).reshape(-1, 1)
+    n = len(ts)
+    score_sum = np.zeros(n)
+    score_count = np.zeros(n)
+
+    model = IsolationForest(contamination="auto", random_state=42)
+
+    # Slide windows
+    for start in range(0, n - window_size + 1, stride):
+        end = start + window_size
+        window_data = ts[start:end]
+
+        model.fit(window_data)
+        window_scores = model.decision_function(window_data)
+
+        score_sum[start:end] += window_scores
+        score_count[start:end] += 1
+
+    # average the score over each window (Overlapping windows)
+    valid = score_count > 0
+    averaged_scores = np.full(n, np.nan)
+    averaged_scores[valid] = score_sum[valid] / score_count[valid]
+
+    # Compute global threshold from averaged scores
+    score_mean = np.nanmean(averaged_scores)
+    score_std = np.nanstd(averaged_scores)
+    threshold = score_mean - std_factor * score_std
+
+    # Label anomalies
+    anomaly_mask = averaged_scores < threshold
+    anomaly_indices = np.where(anomaly_mask)[0]
+    if VERBOSE:
+        print(f"End of anomaly detection. {len(anomaly_indices)} anomalies found")
+
+    # Plot result
+    if plot:
+        plot_anomaly_detection(
+            time_series,
             anomaly_indices,
-            time_series[anomaly_indices],
-            color="red",
-            label="Anomalies",
+            "Adaptiver Isolation Forest - Sliding-Window",
         )
-        plt.title("Anomaly Detection using Isolation Forest")
-        plt.legend()
-        plt.show()
 
     return anomaly_indices
 
@@ -143,39 +154,21 @@ def detect_anomalies_one_class_svm(
         print("Starting anomaly detection")
 
     # Create overlapping windows of the data
-    num_windows = time_series.shape[0] - window_size + 1
-    subsequences = np.zeros((num_windows, window_size))
-    for i in range(num_windows):
-        subsequences[i] = time_series[i : i + window_size]
+    number_windows = time_series.shape[0] - window_size + 1
+    windows = np.zeros((number_windows, window_size))
+    for i in range(number_windows):
+        windows[i] = time_series[i : i + window_size]
 
     # Initialize and train model
     svm = OneClassSVM(kernel="rbf", nu=nu, gamma="auto")
-    svm.fit(subsequences)
+    svm.fit(windows)
 
     # predict anomalies
-    labels = svm.predict(subsequences)
+    labels = svm.predict(windows)
     anomaly_indices = np.where(labels == -1)[0]
 
-    # print(np.count_nonzero(labels == -1))
-    """
-    anomaly_indices = np.zeros_like(time_series, dtype=int)
-    for i, prediction in enumerate(labels):
-        if prediction == -1:
-            anomaly_indices[i : i + window_size] = 1
-    """
-    # print(anomaly_indices)
     if plot:
-        plt.figure(figsize=(12, 5))
-        plt.plot(time_series, label="Time Series")
-        plt.scatter(
-            anomaly_indices,
-            time_series[anomaly_indices],
-            color="red",
-            label="Anomalies",
-        )
-        plt.title("Anomaly Detection using SVM One Class")
-        plt.legend()
-        plt.show()
+        plot_anomaly_detection(time_series, anomaly_indices, "One-Class SVM")
 
     if VERBOSE:
         print(f"End of anomaly detection. {len(anomaly_indices)} anomalies found")
@@ -183,18 +176,18 @@ def detect_anomalies_one_class_svm(
     return anomaly_indices
 
 
-def remove_anomalies(time_series: np.array, threshold=0.7):
+def remove_anomalies(time_series: np.array, threshold=0.8):
     """
     removes anomalies from time series
     returns cleaned time series
     """
 
-    if ANOMALY_DETECTION_METHOD == 0:
+    if ANOMALY_DETECTION_METHOD == 1:
         if np.max(np.abs(time_series)) < threshold:
             return time_series
         anomalies = detect_anomalies_iforest_windowed_threshold(time_series)
 
-    if ANOMALY_DETECTION_METHOD == 1 or ANOMALY_DETECTION_METHOD == 2:
+    if ANOMALY_DETECTION_METHOD == 0 or ANOMALY_DETECTION_METHOD == 2:
         expected_anomalies = np.sum(np.abs(time_series) > threshold)
         if expected_anomalies == 0:
             return time_series
@@ -212,7 +205,7 @@ def remove_anomalies(time_series: np.array, threshold=0.7):
         if VERBOSE:
             print(f"expected anomaly ratio: {contamination_ratio}")
 
-        if ANOMALY_DETECTION_METHOD == 1:
+        if ANOMALY_DETECTION_METHOD == 0:
             anomalies = detect_anomalies_iforest_contamination(
                 time_series, contamination_ratio
             )
@@ -336,68 +329,6 @@ def get_metrics_subject(subject_number: int):
         metrics_subject.append(evaluation_exercise)
 
     return metrics_subject
-
-
-def get_analysis(muscle_number: int, values, differences):
-    """
-    perform statistical analysis and return report as dictionary
-    """
-    VALUE_STRINGS = {0: "max", 1: "mean", 2: "median frequency"}
-    report = {MUSCLE_NAMES[muscle_number]: {}}
-
-    for i in range(len(differences)):
-        # Use shapiro-wilk test to test for normality
-        _, p = shapiro(differences[i])
-
-        mean_diff = np.mean(differences[i])
-        std_diff = np.std(differences[i], ddof=1)
-
-        # differences are normally distributed, use paired t-test
-        if p > 0.05:
-            _, p = ttest_rel([a for (a, b) in values[i]], [b for (a, b) in values[i]])
-
-            # Compute Cohen's d-value for effect size
-            d = mean_diff / std_diff
-            effect_size = f"Cohen d-value : {d}"
-            if d < 0.2:
-                effect_size += ". no effect"
-            elif d < 0.5:
-                effect_size += ". small effect"
-            elif d < 0.8:
-                effect_size += ". medium effect"
-            else:
-                effect_size += ". large effect"
-
-        # differences are not normally distributed, use wilcoxon signed-rank test
-        else:
-            _, p = wilcoxon([a for (a, b) in values[i]], [b for (a, b) in values[i]])
-
-            # Compute effect size
-            z = norm.ppf(1 - p / 2)
-            r = z / np.sqrt(len(differences[i]))
-
-            effect_size = f"Wilcoxon r-value : {r}"
-            if r < 0.1:
-                effect_size += ". no effect"
-            elif r < 0.3:
-                effect_size += ". small effect"
-            elif r < 0.5:
-                effect_size += ". medium effect"
-            else:
-                effect_size += ". large effect"
-
-        ci_low = mean_diff - 1.96 * (std_diff / np.sqrt(len(differences[i])))
-        ci_high = mean_diff + 1.96 * (std_diff / np.sqrt(len(differences[i])))
-
-        report[MUSCLE_NAMES[muscle_number]][VALUE_STRINGS[i]] = {
-            "mean difference": mean_diff,
-            "standart deviation": std_diff,
-            "95'%' confidence interval low": ci_low,
-            "95'%' confidence interval high": ci_high,
-            "p-value": p,
-            "effect size": effect_size,
-        }
-    return report
 
 
 def make_reports_from_metrics(evals):
